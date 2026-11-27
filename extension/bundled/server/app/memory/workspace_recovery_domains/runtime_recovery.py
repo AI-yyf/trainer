@@ -674,37 +674,6 @@ def scope_evidence_items_to_workspace(items: list[Any], workspace_id: str) -> li
     ]
 
 
-def _plan_identity_fields(plan: Any) -> dict[str, str]:
-    if plan is None:
-        return {}
-    if isinstance(plan, dict):
-        return {
-            "workspace_id": _text(plan.get("workspace_id") or plan.get("workspaceId")),
-            "id": _text(plan.get("id") or plan.get("plan_id") or plan.get("planId")),
-            "title": _text(plan.get("title")),
-            "summary": _text(plan.get("summary") or plan.get("objective")),
-            "current_step": _text(plan.get("current_step") or plan.get("currentStep")),
-        }
-    return {
-        "workspace_id": _text(getattr(plan, "workspace_id", "") or getattr(plan, "workspaceId", "")),
-        "id": _text(getattr(plan, "id", "") or getattr(plan, "plan_id", "")),
-        "title": _text(getattr(plan, "title", "")),
-        "summary": _text(getattr(plan, "summary", "") or getattr(plan, "objective", "")),
-        "current_step": _text(getattr(plan, "current_step", "")),
-    }
-
-
-def normalize_formal_plan_identity(value: Any) -> dict[str, str] | None:
-    """Incomplete leftover plan identity is not current truth."""
-
-    fields = _plan_identity_fields(value)
-    if not fields:
-        return None
-    if not any(fields[key] for key in ("workspace_id", "id", "title", "summary", "current_step")):
-        return None
-    return fields
-
-
 def select_resources_for_scope(value: Any, workspace_id: str) -> list[Any]:
     if not isinstance(value, list):
         return []

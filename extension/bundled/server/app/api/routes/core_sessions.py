@@ -12,6 +12,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import ValidationError
 
+from ...core.event_ledger import EVENT_BASELINE_IMPORTED
 from ...core.models import (
     AgentCheckpointAccessRequest,
     ChatMessage,
@@ -21,7 +22,10 @@ from ...core.models import (
     TurnRequest,
     UserProfile,
 )
-from ...core.workspace_state_projector import apply_projected_workspace_state
+from ...core.workspace_state_projector import (
+    apply_projected_workspace_state,
+    bootstrap_baseline_event_from_snapshot,
+)
 from ...llm.provider_service import ProviderService
 from ...resources.research_brief import preparation_requested
 from .. import coach_support
@@ -1001,7 +1005,28 @@ def _register_snapshot_and_session_lifecycle_routes(
         }
         if runtime.event_ledger is not None:
             projected = runtime.event_ledger.project_workspace_state(resolved_workspace_id)
-            primary_read = os.environ.get("TRAINER_EVENT_LOG_PRIMARY_READ", "").strip() == "1"
+            if not projected.has_plan_authority and not projected.has_card_authority:
+                baseline_payload = bootstrap_baseline_event_from_snapshot(snapshot_dict)
+                if (
+                    baseline_payload.get("active_plan_id")
+                    or baseline_payload.get("selected_card_id")
+                    or baseline_payload.get("pending_evidence_ids")
+                    or baseline_payload.get("resource_ids")
+                    or baseline_payload.get("recovered_without_live_plan")
+                ):
+                    runtime.event_ledger.record_event(
+                        EVENT_BASELINE_IMPORTED,
+                        actor="system",
+                        scope="workspace",
+                        project_id=resolved_workspace_id,
+                        workspace_id=resolved_workspace_id,
+                        payload_ref=baseline_payload,
+                        idempotency_key=(
+                            f"baseline_imported:{resolved_workspace_id}:{projected.workspace_epoch}"
+                        ),
+                    )
+                    projected = runtime.event_ledger.project_workspace_state(resolved_workspace_id)
+            primary_read = os.environ.get("TRAINER_EVENT_LOG_PRIMARY_READ", "1").strip() != "0"
             apply_projected_workspace_state(
                 snapshot_dict,
                 projected,

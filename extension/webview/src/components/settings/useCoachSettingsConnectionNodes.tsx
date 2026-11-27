@@ -20,7 +20,7 @@ import {
   SimpleInfoRow
 } from "./SettingsControls";
 
-import { LANGUAGE_LABELS } from "../../../../../shared/src";
+import { LANGUAGE_LABELS } from "../../../../../shared/src/types";
 import { ActionButton } from "../common";
 import { ChevronDownIcon,ComposeIcon,PlayIcon,PlusIcon,TrashIcon } from "../icons";
 import { DataFolderIcon,DoneIcon,ReloadIcon } from "../icons/inline";

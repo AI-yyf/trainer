@@ -1,4 +1,4 @@
-"""Pure append-only workspace state projection (Event-Log Evolution Step 1).
+"""Pure append-only workspace state projection (Event-Log Evolution Steps 1-3).
 
 Reduces effective ``EventLedgerEntry`` records for a single workspace into an
 authoritative, deterministic :class:`ProjectedWorkspaceState`. Only events in
@@ -39,6 +39,30 @@ from .models import EventLedgerEntry
 
 logger = logging.getLogger(__name__)
 
+_PLAN_AUTHORITY_EVENTS = frozenset(
+    {
+        EVENT_BASELINE_IMPORTED,
+        EVENT_WORKSPACE_RESET,
+        EVENT_SANDBOX_WORKSPACE_CLEARED,
+        EVENT_PLAN_GENERATED,
+        EVENT_PLAN_UPDATED,
+        EVENT_PLAN_STAGE_ADVANCED,
+        EVENT_PLAN_REPLANNED_AFTER_FAILURE,
+        EVENT_PLAN_CLEARED,
+    }
+)
+
+_CARD_AUTHORITY_EVENTS = frozenset(
+    {
+        EVENT_BASELINE_IMPORTED,
+        EVENT_WORKSPACE_RESET,
+        EVENT_SANDBOX_WORKSPACE_CLEARED,
+        EVENT_PLAN_CLEARED,
+        EVENT_ACTIVE_CARD_SELECTED,
+        EVENT_CARD_STATUS_TRANSITIONED,
+    }
+)
+
 
 @dataclass(frozen=True, slots=True)
 class ProjectedWorkspaceState:
@@ -57,6 +81,8 @@ class ProjectedWorkspaceState:
     rejected_evidence_ids: tuple[str, ...] = ()
     resource_ids: tuple[str, ...] = ()
     recovered_without_live_plan: bool = False
+    has_plan_authority: bool = False
+    has_card_authority: bool = False
 
     @property
     def has_live_plan(self) -> bool:
@@ -78,6 +104,8 @@ class ProjectedWorkspaceState:
             "rejected_evidence_ids": list(self.rejected_evidence_ids),
             "resource_ids": list(self.resource_ids),
             "recovered_without_live_plan": self.recovered_without_live_plan,
+            "has_plan_authority": self.has_plan_authority,
+            "has_card_authority": self.has_card_authority,
         }
 
 
@@ -95,6 +123,69 @@ def _clean_id_list(values: Any) -> list[str]:
         if text and text not in out:
             out.append(text)
     return out
+
+
+def _extract_snapshot_selected_card_id(snapshot: Mapping[str, Any]) -> str | None:
+    direct = _clean_id(snapshot.get("selected_card_id") or snapshot.get("selectedCardId"))
+    if direct is not None:
+        return direct
+    memory = snapshot.get("memory")
+    if isinstance(memory, Mapping):
+        workspace = memory.get("workspace")
+        if isinstance(workspace, Mapping):
+            ws_selected = _clean_id(
+                workspace.get("selected_card_id") or workspace.get("selectedCardId")
+            )
+            if ws_selected is not None:
+                return ws_selected
+        routing = memory.get("active_training_card_routing") or memory.get(
+            "activeTrainingCardRouting"
+        )
+        if isinstance(routing, Mapping):
+            routed = _clean_id(
+                routing.get("selected_card_id") or routing.get("selectedCardId")
+            )
+            if routed is not None:
+                return routed
+    return None
+
+
+def _extract_snapshot_pending_evidence_ids(snapshot: Mapping[str, Any]) -> list[str]:
+    pending_ids: list[str] = []
+    candidates: list[Any] = [snapshot.get("evidence_queue")]
+    memory = snapshot.get("memory")
+    if isinstance(memory, Mapping):
+        ev_queue = memory.get("evidence_queue") or memory.get("evidenceQueue")
+        if isinstance(ev_queue, Mapping):
+            candidates.append(ev_queue.get("pending"))
+        else:
+            candidates.append(ev_queue)
+    for raw in candidates:
+        if isinstance(raw, Mapping):
+            raw = raw.get("pending")
+        if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes)):
+            for item in raw:
+                if isinstance(item, Mapping):
+                    ev_id = _clean_id(item.get("id") or item.get("evidence_id"))
+                    if ev_id and ev_id not in pending_ids:
+                        pending_ids.append(ev_id)
+    return pending_ids
+
+
+def _extract_snapshot_resource_ids(snapshot: Mapping[str, Any]) -> list[str]:
+    resource_ids: list[str] = []
+    candidates: list[Any] = [snapshot.get("resources")]
+    memory = snapshot.get("memory")
+    if isinstance(memory, Mapping):
+        candidates.append(memory.get("resources"))
+    for raw in candidates:
+        if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes)):
+            for item in raw:
+                if isinstance(item, Mapping):
+                    res_id = _clean_id(item.get("id") or item.get("resource_id"))
+                    if res_id and res_id not in resource_ids:
+                        resource_ids.append(res_id)
+    return resource_ids
 
 
 def project_workspace_state(
@@ -141,11 +232,18 @@ def project_workspace_state(
     rejected_evidence: list[str] = []
     resources: list[str] = []
     recovered_without_live_plan = False
+    has_plan_authority = False
+    has_card_authority = False
 
     for entry in ordered:
         payload = entry.payload_ref
         after = entry.after_state_ref
         kind = entry.event_type
+
+        if kind in _PLAN_AUTHORITY_EVENTS:
+            has_plan_authority = True
+        if kind in _CARD_AUTHORITY_EVENTS:
+            has_card_authority = True
 
         if kind == EVENT_BASELINE_IMPORTED:
             active_plan_id = _clean_id(payload.get("active_plan_id") or after.get("active_plan_id"))
@@ -207,16 +305,28 @@ def project_workspace_state(
 
         elif kind == EVENT_CARD_STATUS_TRANSITIONED:
             card_id = _clean_id(payload.get("card_id") or after.get("card_id"))
-            status = str(payload.get("status") or after.get("status") or "").strip().lower()
-            if card_id and status in {"completed", "passed", "mastered"}:
+            status = str(
+                payload.get("status") or payload.get("result") or after.get("status") or ""
+            ).strip().lower()
+            if card_id and status in {"completed", "implemented", "passed", "mastered"}:
                 if card_id not in completed_cards:
                     completed_cards.append(card_id)
-            if card_id and card_id == selected_card_id and status in {"archived", "dismissed", "deleted"}:
+            if card_id and card_id == selected_card_id and status in {
+                "archived",
+                "skipped",
+                "dismissed",
+                "deleted",
+            }:
                 selected_card_id = None
 
         elif kind in {EVENT_EVIDENCE_ENQUEUED, EVENT_PLAN_EVIDENCE_CREATED}:
             ev_id = _clean_id(payload.get("evidence_id") or after.get("evidence_id"))
-            if ev_id and ev_id not in pending_evidence and ev_id not in adopted_evidence and ev_id not in rejected_evidence:
+            if (
+                ev_id
+                and ev_id not in pending_evidence
+                and ev_id not in adopted_evidence
+                and ev_id not in rejected_evidence
+            ):
                 pending_evidence.append(ev_id)
 
         elif kind == EVENT_EVIDENCE_ADOPTED:
@@ -259,6 +369,8 @@ def project_workspace_state(
         rejected_evidence_ids=tuple(rejected_evidence),
         resource_ids=tuple(resources),
         recovered_without_live_plan=recovered_without_live_plan,
+        has_plan_authority=has_plan_authority,
+        has_card_authority=has_card_authority,
     )
 
 
@@ -270,25 +382,11 @@ def bootstrap_baseline_event_from_snapshot(
     plan_map = plan if isinstance(plan, Mapping) else {}
     plan_id = _clean_id(plan_map.get("id") or plan_map.get("plan_id"))
     plan_title = str(plan_map.get("title") or "").strip()
-    step_id = _clean_id(plan_map.get("current_step_id") or plan_map.get("active_step_id"))
-
-    evidence_raw = snapshot.get("evidence_queue")
-    pending_ids: list[str] = []
-    if isinstance(evidence_raw, Sequence) and not isinstance(evidence_raw, (str, bytes)):
-        for item in evidence_raw:
-            if isinstance(item, Mapping):
-                ev_id = _clean_id(item.get("id") or item.get("evidence_id"))
-                if ev_id and ev_id not in pending_ids:
-                    pending_ids.append(ev_id)
-
-    resources_raw = snapshot.get("resources")
-    resource_ids: list[str] = []
-    if isinstance(resources_raw, Sequence) and not isinstance(resources_raw, (str, bytes)):
-        for item in resources_raw:
-            if isinstance(item, Mapping):
-                res_id = _clean_id(item.get("id") or item.get("resource_id"))
-                if res_id and res_id not in resource_ids:
-                    resource_ids.append(res_id)
+    step_id = _clean_id(
+        plan_map.get("current_step_id")
+        or plan_map.get("current_stage_id")
+        or plan_map.get("active_step_id")
+    )
 
     runtime_status = snapshot.get("plan_runtime_status")
     recovered = (
@@ -300,9 +398,9 @@ def bootstrap_baseline_event_from_snapshot(
         "active_plan_id": plan_id,
         "active_plan_title": plan_title,
         "active_step_id": step_id,
-        "selected_card_id": _clean_id(snapshot.get("selected_card_id")),
-        "pending_evidence_ids": pending_ids,
-        "resource_ids": resource_ids,
+        "selected_card_id": _extract_snapshot_selected_card_id(snapshot),
+        "pending_evidence_ids": _extract_snapshot_pending_evidence_ids(snapshot),
+        "resource_ids": _extract_snapshot_resource_ids(snapshot),
         "recovered_without_live_plan": recovered,
     }
 
@@ -319,19 +417,8 @@ def shadow_diff_with_workspace_recovery(
     legacy_plan = legacy_snapshot.get("plan")
     legacy_plan_map = legacy_plan if isinstance(legacy_plan, Mapping) else {}
     legacy_plan_id = _clean_id(legacy_plan_map.get("id") or legacy_plan_map.get("plan_id"))
-    legacy_selected_card = _clean_id(legacy_snapshot.get("selected_card_id"))
-
-    legacy_evidence_raw = legacy_snapshot.get("evidence_queue")
-    legacy_pending_ids: tuple[str, ...] = ()
-    if isinstance(legacy_evidence_raw, Sequence) and not isinstance(legacy_evidence_raw, (str, bytes)):
-        extracted = [
-            ev_id
-            for item in legacy_evidence_raw
-            if isinstance(item, Mapping)
-            for ev_id in (_clean_id(item.get("id") or item.get("evidence_id")),)
-            if ev_id is not None
-        ]
-        legacy_pending_ids = tuple(dict.fromkeys(extracted))
+    legacy_selected_card = _extract_snapshot_selected_card_id(legacy_snapshot)
+    legacy_pending_ids = tuple(_extract_snapshot_pending_evidence_ids(legacy_snapshot))
 
     legacy_runtime = legacy_snapshot.get("plan_runtime_status")
     legacy_recovered = (
@@ -350,21 +437,39 @@ def shadow_diff_with_workspace_recovery(
     return {field: (a, b) for field, (a, b) in pairs.items() if a != b}
 
 
+def _apply_card_projection_to_snapshot(
+    snapshot_dict: dict[str, Any],
+    card_id: str | None,
+) -> None:
+    if "selected_card_id" in snapshot_dict or card_id is not None:
+        snapshot_dict["selected_card_id"] = card_id
+    memory = snapshot_dict.get("memory")
+    if isinstance(memory, dict):
+        workspace = memory.get("workspace")
+        if isinstance(workspace, dict):
+            workspace["selected_card_id"] = card_id or ""
+            if not card_id:
+                workspace.pop("selectedCardId", None)
+                workspace["selected_card_title"] = ""
+        if not card_id:
+            memory["active_training_card_routing"] = None
+
+
 def apply_projected_workspace_state(
     snapshot_dict: dict[str, Any],
     projected: ProjectedWorkspaceState,
     *,
-    primary_read: bool = False,
+    primary_read: bool = True,
 ) -> dict[str, Any]:
     """Overlay authoritative event-log projection onto a ``/snapshot`` dict.
 
-    - When the workspace has recorded events (``state_seq > 0``), computes
-      shadow-diff against legacy ``workspace_recovery`` fields and logs any
-      divergence for observability.
-    - When ``primary_read=True`` or the current ``workspace_epoch`` has an
-      explicit reset/clear (``recovered_without_live_plan=True``), enforces
-      the projected live-plan/card boundary structurally so pre-reset state
-      cannot leak through.
+    - ``primary_read`` defaults to ``True`` (Event-Log Evolution Step 3).
+    - Enforces projected plan state whenever ``projected.has_plan_authority``
+      (under ``primary_read=True``) or ``projected.recovered_without_live_plan``
+      is active, preventing pre-reset or mismatched leftover plans from leaking.
+    - Enforces projected card selection whenever ``projected.has_card_authority``
+      (under ``primary_read=True``) or ``projected.recovered_without_live_plan``
+      is active, including clearing ``selected_card_id`` on skip/archive/reset.
     """
     if projected.state_seq <= 0:
         return snapshot_dict
@@ -379,18 +484,29 @@ def apply_projected_workspace_state(
             sorted(diff.keys()),
         )
 
-    if primary_read or projected.recovered_without_live_plan:
+    enforce_plan = (primary_read and projected.has_plan_authority) or projected.recovered_without_live_plan
+    if enforce_plan:
         if not projected.has_live_plan:
             snapshot_dict["plan"] = None
+            memory = snapshot_dict.get("memory")
+            if isinstance(memory, dict):
+                memory["active_plan"] = None
             if projected.recovered_without_live_plan:
-                snapshot_dict["selected_card_id"] = None
+                _apply_card_projection_to_snapshot(snapshot_dict, None)
                 existing_status = snapshot_dict.get("plan_runtime_status")
                 status_map = dict(existing_status) if isinstance(existing_status, Mapping) else {}
                 status_map["recovered"] = True
                 status_map["workspace_epoch"] = projected.workspace_epoch
                 status_map["state_seq"] = projected.state_seq
                 snapshot_dict["plan_runtime_status"] = status_map
-        elif primary_read and projected.selected_card_id is not None:
-            snapshot_dict["selected_card_id"] = projected.selected_card_id
+        elif primary_read:
+            existing_plan = snapshot_dict.get("plan")
+            if isinstance(existing_plan, Mapping):
+                existing_plan_id = _clean_id(existing_plan.get("id") or existing_plan.get("plan_id"))
+                if existing_plan_id and existing_plan_id != projected.active_plan_id:
+                    snapshot_dict["plan"] = None
+
+    if primary_read and projected.has_card_authority and not projected.recovered_without_live_plan:
+        _apply_card_projection_to_snapshot(snapshot_dict, projected.selected_card_id)
 
     return snapshot_dict

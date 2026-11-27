@@ -2,7 +2,6 @@ import { normalizeProviderProtocol } from "./providerProtocols";
 import { stripHostLastTestSecrets } from "./hostLastTestGovernance";
 
 export type SettingsCapabilityName = "tools" | "streaming" | "thinking" | "vision";
-export type SettingsCapabilityChipKind = "ready" | "unsupported" | "unverified";
 
 export type SettingsLastTestScope = {
   workspaceId?: string;
@@ -47,13 +46,6 @@ export type SettingsCapabilityTruth = {
   streamingReady: boolean;
   thinkingReady: boolean;
   visionReady: boolean;
-};
-
-export type SettingsCapabilityChips = {
-  tools: SettingsCapabilityChipKind;
-  streaming: SettingsCapabilityChipKind;
-  thinking: SettingsCapabilityChipKind;
-  vision: SettingsCapabilityChipKind;
 };
 
 export type SettingsCapabilitySurfaceStatus =
@@ -168,40 +160,6 @@ export function settingsCapabilityIsReady(
     evidence?.state === "verified" &&
     evidence.observed === true
   );
-}
-
-export function deriveSettingsCapabilityChip(
-  lastTest: SettingsLastTestLike | undefined,
-  name: SettingsCapabilityName,
-  scope: SettingsLastTestScope,
-): SettingsCapabilityChipKind {
-  if (!settingsLastTestAllowsChips(lastTest, scope)) {
-    return "unverified";
-  }
-  const scoped = selectScopedSettingsLastTest(lastTest, scope);
-  if (!scoped) {
-    return "unverified";
-  }
-  if (settingsCapabilityIsReady(scoped, name, scope)) {
-    return "ready";
-  }
-  const evidence = findEvidence(scoped, name);
-  if (evidence?.state === "unsupported" && evidence.observed === false) {
-    return "unsupported";
-  }
-  return "unverified";
-}
-
-export function deriveSettingsCapabilityChips(
-  lastTest: SettingsLastTestLike | undefined,
-  scope: SettingsLastTestScope,
-): SettingsCapabilityChips {
-  return {
-    tools: deriveSettingsCapabilityChip(lastTest, "tools", scope),
-    streaming: deriveSettingsCapabilityChip(lastTest, "streaming", scope),
-    thinking: deriveSettingsCapabilityChip(lastTest, "thinking", scope),
-    vision: deriveSettingsCapabilityChip(lastTest, "vision", scope),
-  };
 }
 
 export function scopedSettingsCapabilityTruth(

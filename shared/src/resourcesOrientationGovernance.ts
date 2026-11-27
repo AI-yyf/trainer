@@ -1,5 +1,5 @@
 import { resourceTrainingBlockingQualityFlags } from "./resourceTrust";
-import { coachOrientationTone, type CoachOrientationState } from "./coachOrientationGovernance";
+import { type CoachOrientationState } from "./coachOrientationGovernance";
 import { resolveMaterialOrientationKey } from "./materialRecommendationGovernance";
 import { resourcesOrientationCopy } from "./orientationCopy";
 import { liveEvidenceBinding } from "./planOrientationGovernance";
@@ -49,18 +49,6 @@ export interface ResourcesOrientationRecord {
   source: "snapshot";
   revision: number;
 }
-
-const ACTIONS = new Set<ResourcesOrientationAction>([
-  "import_resource",
-  "wait_index",
-  "retry_index",
-  "open_resource",
-  "select_resource",
-  "open_plan",
-  "open_training",
-  "open_coach",
-  "wait",
-]);
 
 function text(value: string | undefined): string {
   return value?.trim() ?? "";
@@ -121,60 +109,6 @@ function record(
     advancedWhere: input.advancedWhere,
     source: "snapshot",
     revision: input.revision ?? 1,
-  };
-}
-
-export function normalizeResourcesOrientationRecord(value: unknown): ResourcesOrientationRecord | undefined {
-  if (!value || typeof value !== "object") {
-    return undefined;
-  }
-  const row = value as Record<string, unknown>;
-  const objectLabel = text(
-    typeof row.objectLabel === "string"
-      ? row.objectLabel
-      : typeof row.object_label === "string"
-        ? row.object_label
-        : "",
-  );
-  const state = text(typeof row.state === "string" ? row.state : "");
-  const why = text(typeof row.why === "string" ? row.why : "");
-  const primaryAction = text(
-    typeof row.primaryAction === "string"
-      ? row.primaryAction
-      : typeof row.primary_action === "string"
-        ? row.primary_action
-        : "",
-  ) as ResourcesOrientationAction;
-  const primaryActionLabel = text(
-    typeof row.primaryActionLabel === "string"
-      ? row.primaryActionLabel
-      : typeof row.primary_action_label === "string"
-        ? row.primary_action_label
-        : "",
-  );
-  const nextStep = text(
-    typeof row.nextStep === "string" ? row.nextStep : typeof row.next_step === "string" ? row.next_step : "",
-  );
-  if (!objectLabel || !state || !why || !ACTIONS.has(primaryAction) || !nextStep) {
-    return undefined;
-  }
-  return {
-    objectKind: "resources",
-    objectLabel,
-    state: state as CoachOrientationState,
-    why,
-    primaryAction,
-    primaryActionLabel,
-    nextStep,
-    advancedWhere: text(
-      typeof row.advancedWhere === "string"
-        ? row.advancedWhere
-        : typeof row.advanced_where === "string"
-          ? row.advanced_where
-          : "",
-    ),
-    source: "snapshot",
-    revision: typeof row.revision === "number" && row.revision > 0 ? Math.floor(row.revision) : 1,
   };
 }
 
@@ -362,12 +296,6 @@ export function deriveResourcesOrientation(input: ResourcesOrientationInput): Re
     nextStep: copy.readThenBindWhenLinked,
     advancedWhere: copy.resourcesCurrentItem,
   });
-}
-
-export function resourcesOrientationTone(
-  state: CoachOrientationState,
-): ReturnType<typeof coachOrientationTone> {
-  return coachOrientationTone(state);
 }
 
 export function resolveResourcesBindingIds(input: {

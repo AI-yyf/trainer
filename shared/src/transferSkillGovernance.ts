@@ -3,11 +3,6 @@
  */
 export type TransferSkillState = "project_only" | "awaiting_second_scene" | "transferable";
 
-export type TransferSkillScene = {
-  workspaceId: string;
-  sceneKey: string;
-};
-
 export type TransferSkillStateRecord = {
   concept: string;
   state: TransferSkillState;
@@ -16,20 +11,6 @@ export type TransferSkillStateRecord = {
   sceneKeys: string[];
   why: string;
   next: string;
-};
-
-export type TransferSkillDecisionInput = {
-  concept?: string;
-  workspaceId?: string;
-  currentSceneKey?: string;
-  existingScenes?: TransferSkillScene[];
-  outcomeSuccess?: boolean;
-  transferSourceWorkspaceId?: string;
-  transferTargetWorkspaceId?: string;
-  transferSourceContext?: string;
-  transferTargetContext?: string;
-  transferEvidenceSummary?: string;
-  scenario?: string;
 };
 
 export type TransferSkillCopy = {
@@ -60,51 +41,6 @@ export function normalizeTransferSkillState(value: string | undefined): Transfer
     return normalized as TransferSkillState;
   }
   return undefined;
-}
-
-export function resolveSkillSceneKey(input: TransferSkillDecisionInput): string {
-  const sourceWorkspace = text(input.transferSourceWorkspaceId);
-  const targetWorkspace = text(input.transferTargetWorkspaceId);
-  const sourceContext = text(input.transferSourceContext);
-  const targetContext = text(input.transferTargetContext);
-  const evidence = text(input.transferEvidenceSummary);
-  const scenario = casefold(input.scenario).replace(/-/g, "_");
-  if (sourceContext && targetContext && casefold(sourceContext) !== casefold(targetContext) && evidence) {
-    return `transfer:${casefold(targetContext)}`;
-  }
-  if (
-    evidence &&
-    sourceWorkspace &&
-    targetWorkspace &&
-    sourceWorkspace !== targetWorkspace &&
-    (scenario === "cross_project_transfer" || sourceWorkspace !== targetWorkspace)
-  ) {
-    return `workspace:${casefold(targetWorkspace)}`;
-  }
-  return DEFAULT_TRANSFER_SCENE_KEY;
-}
-
-export function uniqueTransferScenes(scenes: TransferSkillScene[] | undefined): TransferSkillScene[] {
-  const seen = new Set<string>();
-  const unique: TransferSkillScene[] = [];
-  for (const scene of scenes ?? []) {
-    const workspaceId = text(scene.workspaceId);
-    const sceneKey = text(scene.sceneKey) || DEFAULT_TRANSFER_SCENE_KEY;
-    if (!workspaceId) {
-      continue;
-    }
-    const key = casefold(workspaceId);
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    unique.push({ workspaceId, sceneKey });
-  }
-  return unique;
-}
-
-export function uniqueTransferWorkspaceIds(scenes: TransferSkillScene[] | undefined): string[] {
-  return uniqueTransferScenes(scenes).map((scene) => scene.workspaceId);
 }
 
 function sceneKeyDependsOnExcludedWorkspace(sceneKey: string, excluded: Set<string>): boolean {
@@ -179,32 +115,6 @@ export function demoteTransferSkillAfterExcludedWorkspaces(
   };
 }
 
-export function resolveTransferSkillState(sceneCount: number): TransferSkillState {
-  if (sceneCount >= 2) {
-    return "transferable";
-  }
-  if (sceneCount === 1) {
-    return "awaiting_second_scene";
-  }
-  return "project_only";
-}
-
-export function shouldPromoteTransferableSkill(input: TransferSkillDecisionInput): boolean {
-  if (!input.outcomeSuccess) {
-    return false;
-  }
-  const concept = text(input.concept);
-  const workspaceId = text(input.workspaceId);
-  if (!concept || !workspaceId) {
-    return false;
-  }
-  const currentScene: TransferSkillScene = {
-    workspaceId,
-    sceneKey: text(input.currentSceneKey) || resolveSkillSceneKey(input),
-  };
-  return uniqueTransferWorkspaceIds([...(input.existingScenes ?? []), currentScene]).length >= 2;
-}
-
 export function describeTransferSkillState(
   state: TransferSkillState,
   concept?: string,
@@ -248,25 +158,6 @@ export function describeTransferSkillState(
     next: zh
       ? "继续在这里做；全局迁移需要第二个场景。"
       : "Keep working here; global transfer needs a second scene.",
-  };
-}
-
-export function buildTransferSkillStateRecord(input: {
-  concept: string;
-  scenes: TransferSkillScene[];
-  language?: string;
-}): TransferSkillStateRecord {
-  const unique = uniqueTransferScenes(input.scenes);
-  const state = resolveTransferSkillState(uniqueTransferWorkspaceIds(unique).length);
-  const copy = describeTransferSkillState(state, input.concept, input.language);
-  return {
-    concept: text(input.concept),
-    state,
-    sceneCount: unique.length,
-    workspaceIds: [...new Set(unique.map((scene) => scene.workspaceId))],
-    sceneKeys: [...new Set(unique.map((scene) => scene.sceneKey))],
-    why: copy.why,
-    next: copy.next,
   };
 }
 

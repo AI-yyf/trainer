@@ -3,10 +3,15 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
+from fastapi.testclient import TestClient
+
+from app.core.config import Settings
 from app.core.event_ledger import (
     EVENT_ACTIVE_CARD_SELECTED,
     EVENT_BASELINE_IMPORTED,
     EVENT_CARD_STATUS_TRANSITIONED,
+    EVENT_COACH_TURN_RECORDED,
     EVENT_EVIDENCE_ADOPTED,
     EVENT_EVIDENCE_ENQUEUED,
     EVENT_EVIDENCE_REJECTED,
@@ -19,11 +24,20 @@ from app.core.event_ledger import (
     EventLedgerService,
 )
 from app.core.event_ledger_store import EventLedgerStore
+from app.core.models import (
+    ActiveCardSelectionResult,
+    EvidenceItem,
+    LearningPlan,
+    PlanStage,
+    TrainingCardCandidateSnapshot,
+)
 from app.core.workspace_state_projector import (
+    apply_projected_workspace_state,
     bootstrap_baseline_event_from_snapshot,
     project_workspace_state,
     shadow_diff_with_workspace_recovery,
 )
+from app.main import create_app
 
 
 def test_event_ledger_store_assigns_monotonic_seq_and_bumps_epoch_on_reset(tmp_path: Path) -> None:
@@ -78,6 +92,8 @@ def test_event_ledger_store_assigns_monotonic_seq_and_bumps_epoch_on_reset(tmp_p
     assert projected.selected_card_id is None
     assert projected.pending_evidence_ids == ()
     assert projected.recovered_without_live_plan is True
+    assert projected.has_plan_authority is True
+    assert projected.has_card_authority is True
 
 
 def test_event_ledger_store_migrates_legacy_table_without_epoch_and_seq(tmp_path: Path) -> None:
@@ -234,8 +250,6 @@ def test_shadow_diff_matches_workspace_recovery_across_live_and_recovered_scenar
 
 
 def test_step2_event_ledger_project_and_apply_projected_state_on_snapshot(tmp_path: Path) -> None:
-    from app.core.workspace_state_projector import apply_projected_workspace_state
-
     store = EventLedgerStore(tmp_path / "step2.db")
     ledger = EventLedgerService(store)
 
@@ -281,3 +295,150 @@ def test_step2_event_ledger_project_and_apply_projected_state_on_snapshot(tmp_pa
     assert stale_snap["plan_runtime_status"]["recovered"] is True
     assert stale_snap["plan_runtime_status"]["workspace_epoch"] == 1
     assert stale_snap["plan_runtime_status"]["state_seq"] == 3
+
+
+def test_step3_snapshot_default_primary_read_hydrates_baseline_and_tracks_live_mutations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("TRAINER_EVENT_LOG_PRIMARY_READ", raising=False)
+    app = create_app(Settings(data_dir=tmp_path))
+    runtime = app.state.runtime
+    assert runtime.event_ledger is not None
+    assert runtime.memory_service._event_ledger is runtime.event_ledger
+
+    ws_cold = "ws-step3-cold"
+    legacy_plan = LearningPlan(
+        id="plan-cold-1",
+        title="Legacy Cold Plan",
+        summary="Cold start baseline",
+        current_stage_id="stage-1",
+        current_step="Verify event projection",
+        stages=[
+            PlanStage(
+                id="stage-1",
+                title="Stage 1",
+                goal="Verify event projection",
+                status="active",
+                outcomes=["projection"],
+            )
+        ],
+    )
+    # Seed legacy SQLite state without emitting ledger events to simulate pre-Step-3 workspace
+    runtime.memory_service._event_ledger = None
+    runtime.repository.save_plan(ws_cold, legacy_plan)
+    runtime.memory_service.bind_explicit_generated_plan(ws_cold, legacy_plan)
+    runtime.memory_service._event_ledger = runtime.event_ledger
+
+    # Record an unrelated chat event first to ensure state_seq > 0 does not wipe cold-start plan
+    runtime.event_ledger.record_event(
+        EVENT_COACH_TURN_RECORDED,
+        workspace_id=ws_cold,
+        project_id=ws_cold,
+        payload_ref={"message": "hello"},
+    )
+
+    with TestClient(app) as client:
+        res1 = client.get("/snapshot", params={"workspace_id": ws_cold, "fields": "full"})
+        assert res1.status_code == 200
+        body1 = res1.json()
+        assert body1["snapshot"]["plan"]["id"] == "plan-cold-1"
+        proj1 = body1["workspace_projection"]
+        assert proj1["has_live_plan"] is True
+        assert proj1["active_plan_id"] == "plan-cold-1"
+        assert proj1["has_plan_authority"] is True
+        seq_after_import = proj1["state_seq"]
+
+        # Repeated /snapshot must not duplicate baseline_imported
+        res2 = client.get("/snapshot", params={"workspace_id": ws_cold, "fields": "full"})
+        assert res2.status_code == 200
+        assert res2.json()["workspace_projection"]["state_seq"] == seq_after_import
+
+        # Live mutations: select saved card -> enqueue evidence -> skip card -> reset workspace
+        saved_card = TrainingCardCandidateSnapshot(
+            card_id="card-step3-1",
+            card_type="practice",
+            title="Practice Event Projection",
+            status="candidate",
+            review_state="saved",
+            focus_area="event_ledger",
+            target_skill="projection",
+        )
+        runtime.memory_service.upsert_card(ws_cold, saved_card)
+        runtime.memory_service.persist_active_card_selection(
+            ws_cold,
+            ActiveCardSelectionResult(
+                selected_card_id=saved_card.card_id,
+                selected_card=saved_card,
+                candidate_count=1,
+                eligible_count=1,
+            ),
+        )
+        ev = runtime.memory_service.enqueue_evidence(
+            ws_cold,
+            EvidenceItem(id="ev-step3-1", summary="Passed check", concepts=["projection"], outcome="pass"),
+            verified=True,
+            verification_source="pytest",
+        )
+        assert ev.id == "ev-step3-1"
+
+        res_selected = client.get("/snapshot", params={"workspace_id": ws_cold, "fields": "full"})
+        body_selected = res_selected.json()
+        assert body_selected["workspace_projection"]["selected_card_id"] == "card-step3-1"
+        assert "ev-step3-1" in body_selected["workspace_projection"]["pending_evidence_ids"]
+        assert body_selected["snapshot"]["memory"]["workspace"]["selected_card_id"] == "card-step3-1"
+
+        # Skipping active card clears selected_card_id in both projection and snapshot
+        runtime.memory_service.transition_card_status(ws_cold, "card-step3-1", "skipped", reason="skip")
+        res_skipped = client.get("/snapshot", params={"workspace_id": ws_cold, "fields": "full"})
+        body_skipped = res_skipped.json()
+        assert body_skipped["workspace_projection"]["selected_card_id"] is None
+        assert body_skipped["snapshot"]["memory"]["workspace"].get("selected_card_id", "") == ""
+
+        # Resetting workspace bumps epoch and structurally clears live plan on default primary read
+        runtime.memory_service.reset_workspace_training_state(ws_cold)
+        res_reset = client.get("/snapshot", params={"workspace_id": ws_cold, "fields": "full"})
+        body_reset = res_reset.json()
+        assert body_reset["workspace_projection"]["workspace_epoch"] == 1
+        assert body_reset["workspace_projection"]["has_live_plan"] is False
+        assert body_reset["workspace_projection"]["recovered_without_live_plan"] is True
+        assert body_reset["snapshot"]["plan"] is None
+        assert body_reset["snapshot"]["plan_runtime_status"]["recovered"] is True
+
+
+def test_step3_primary_read_opt_out_env_preserves_legacy_non_reset_read(
+    tmp_path: Path,
+) -> None:
+    store = EventLedgerStore(tmp_path / "step3_optout.db")
+    ledger = EventLedgerService(store)
+    ledger.record_event(
+        EVENT_PLAN_GENERATED,
+        workspace_id="ws-opt",
+        project_id="ws-opt",
+        payload_ref={"plan_id": "plan-ledger", "title": "Ledger Plan"},
+    )
+    ledger.record_event(
+        EVENT_ACTIVE_CARD_SELECTED,
+        workspace_id="ws-opt",
+        project_id="ws-opt",
+        payload_ref={"card_id": "card-ledger"},
+    )
+    projected = ledger.project_workspace_state("ws-opt")
+
+    # Default primary_read=True overrides mismatched legacy plan & card
+    snap_default = {
+        "plan": {"id": "plan-mismatched"},
+        "memory": {"workspace": {"selected_card_id": "card-stale"}},
+    }
+    apply_projected_workspace_state(snap_default, projected)
+    assert snap_default["plan"] is None
+    assert snap_default["memory"]["workspace"]["selected_card_id"] == "card-ledger"
+
+    # Opt-out primary_read=False leaves non-reset legacy snapshot untouched
+    snap_optout = {
+        "plan": {"id": "plan-mismatched"},
+        "memory": {"workspace": {"selected_card_id": "card-stale"}},
+    }
+    apply_projected_workspace_state(snap_optout, projected, primary_read=False)
+    assert snap_optout["plan"] == {"id": "plan-mismatched"}
+    assert snap_optout["memory"]["workspace"]["selected_card_id"] == "card-stale"

@@ -5,6 +5,9 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, cast
 
 from ..core.event_ledger import (
+    EVENT_PLAN_GENERATED,
+    EVENT_PLAN_STAGE_ADVANCED,
+    EVENT_PLAN_UPDATED,
     EVENT_REVIEW_SCHEDULED,
 )
 from ..core.models import (
@@ -118,6 +121,7 @@ logger = logging.getLogger(__name__)
 
 class WorkspaceStateAndRecoveryMixin:
     if TYPE_CHECKING:
+        _canonical_workspace_id: Any
         _event_ledger: Any
         _leftover_persist_context: Any
         _live_training_persist_chrome: Any
@@ -809,8 +813,36 @@ class WorkspaceStateAndRecoveryMixin:
             competing_labels=competing_labels,
         )
         patch.update(leftover_training)
+        previous_plan_id = str(existing.get("plan_id") or existing.get("planId") or "").strip()
+        bound_plan_id = str(record.get("plan_id") or "").strip()
         structured.update_workspace(**patch)
         self._persist_structured(workspace_id)
+        if self._event_ledger is not None and bound_plan_id:
+            canonical_ws = self._canonical_workspace_id(workspace_id)
+            event_kind = (
+                EVENT_PLAN_UPDATED
+                if previous_plan_id and previous_plan_id == bound_plan_id
+                else EVENT_PLAN_GENERATED
+            )
+            try:
+                self._event_ledger.record_event(
+                    event_kind,
+                    actor="learner",
+                    scope="plan",
+                    project_id=canonical_ws,
+                    workspace_id=canonical_ws,
+                    payload_ref={
+                        "plan_id": bound_plan_id,
+                        "title": str(getattr(plan, "title", "") or "").strip(),
+                        "current_step_id": str(
+                            record.get("current_stage_id")
+                            or getattr(plan, "current_stage_id", "")
+                            or ""
+                        ).strip(),
+                    },
+                )
+            except Exception:
+                logger.exception("Could not record explicit plan binding in the event ledger")
         return record
 
     def persist_plan_runtime_resume(
@@ -981,6 +1013,23 @@ class WorkspaceStateAndRecoveryMixin:
         structured.update_workspace(**{PLAN_RUNTIME_KEY: record})
         self._refresh_training_next_challenge_after_runtime_advance(workspace_id, record)
         self._persist_structured(workspace_id)
+        bound_plan_id = str(record.get("plan_id") or "").strip()
+        if self._event_ledger is not None and bound_plan_id:
+            canonical_ws = self._canonical_workspace_id(workspace_id)
+            try:
+                self._event_ledger.record_event(
+                    EVENT_PLAN_STAGE_ADVANCED,
+                    actor="system",
+                    scope="plan",
+                    project_id=canonical_ws,
+                    workspace_id=canonical_ws,
+                    payload_ref={
+                        "plan_id": bound_plan_id,
+                        "current_step_id": str(record.get("current_stage_id") or "").strip(),
+                    },
+                )
+            except Exception:
+                logger.exception("Could not record plan stage advance after adopt in the event ledger")
         return record
 
     def persist_plan_runtime_advance_after_verify(
@@ -1014,6 +1063,23 @@ class WorkspaceStateAndRecoveryMixin:
         structured.update_workspace(**{PLAN_RUNTIME_KEY: record})
         self._refresh_training_next_challenge_after_runtime_advance(workspace_id, record)
         self._persist_structured(workspace_id)
+        bound_plan_id = str(record.get("plan_id") or "").strip()
+        if self._event_ledger is not None and bound_plan_id:
+            canonical_ws = self._canonical_workspace_id(workspace_id)
+            try:
+                self._event_ledger.record_event(
+                    EVENT_PLAN_STAGE_ADVANCED,
+                    actor="system",
+                    scope="plan",
+                    project_id=canonical_ws,
+                    workspace_id=canonical_ws,
+                    payload_ref={
+                        "plan_id": bound_plan_id,
+                        "current_step_id": str(record.get("current_stage_id") or "").strip(),
+                    },
+                )
+            except Exception:
+                logger.exception("Could not record plan stage advance after verify in the event ledger")
         return record
 
     def _stamp_live_selected_card_id_on_advance(

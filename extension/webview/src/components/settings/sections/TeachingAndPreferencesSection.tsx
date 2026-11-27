@@ -6,7 +6,7 @@ import {
 } from "../SettingsControls";
 import { TelemetryOptInPanel } from "../TelemetryOptInPanel";
 
-import { LANGUAGE_LABELS,SUPPORTED_LANGUAGES } from "../../../../../../shared/src";
+import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../../shared/src/types";
 import { ActionButton } from "../../common";
 import { ReloadIcon } from "../../icons/inline";
 import { SettingsSkillsIcon } from "../../icons/navigation/settingsNav";

@@ -1055,6 +1055,7 @@ class MemoryService(
                 payload_ref={
                     "card_id": card.card_id,
                     "title": card.title,
+                    "status": card.status,
                     "result": result,
                     "plan_id": binding.plan_id if binding else "",
                     "stage_id": binding.stage_id if binding else "",

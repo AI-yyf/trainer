@@ -602,6 +602,8 @@ class TrainerRuntime:
             logger.warning("[runtime] cold session persist on eviction failed", exc_info=True)
 
     def __post_init__(self) -> None:
+        if self.event_ledger is not None and getattr(self.memory_service, "_event_ledger", None) is None:
+            self.memory_service._event_ledger = self.event_ledger
         if not isinstance(self.sessions, BoundedSessionDict):
             self.sessions = BoundedSessionDict(
                 self.sessions,

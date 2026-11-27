@@ -1,9 +1,5 @@
-import {
-  applyTransferSkillToCoachOrientation,
-  describeTransferSkillState,
-  type TransferSkillStateRecord,
-} from "./transferSkillGovernance";
-import { coachOrientationTone, type CoachOrientationState } from "./coachOrientationGovernance";
+import { applyTransferSkillToCoachOrientation, describeTransferSkillState, type TransferSkillStateRecord } from "./transferSkillGovernance";
+import { type CoachOrientationState } from "./coachOrientationGovernance";
 import { planOrientationCopy } from "./orientationCopy";
 import type { PlanRuntimeResumeState } from "./workspaceRecoveryGovernance";
 
@@ -457,8 +453,6 @@ export function leftoverSuggestedActionsIsNotLive(input: {
   return leftoverCoachConversationIsNotLive(input);
 }
 
-const MINTING_SUGGESTED_ACTIONS = new Set(["plan", "task", "next_task", "card"]);
-
 export function leftoverBoundPlanCompetingIdentityLabels(input: {
   livePlanId?: string;
   liveCurrentStep?: string;
@@ -514,24 +508,6 @@ export function leftoverMintingSuggestedActionsAreNotLive(input: {
     taskTitle: input.taskTitle,
   });
   return !livePlan && !liveTask;
-}
-
-export function honestSuggestedActionsWithoutLiveObject<T extends { action?: string }>(
-  actions: readonly T[] | undefined,
-  input: {
-    recovered?: boolean;
-    runtimeCurrentStep?: string;
-    planCurrentStep?: string;
-    runtimePlanId?: string;
-    planId?: string;
-    taskTitle?: string;
-  },
-): T[] {
-  const list = [...(actions ?? [])];
-  if (!leftoverMintingSuggestedActionsAreNotLive(input)) {
-    return list;
-  }
-  return list.filter((item) => !MINTING_SUGGESTED_ACTIONS.has(String(item.action ?? "")));
 }
 
 export function leftoverFirstLookHeadlineIsNotLive(input: {
@@ -994,104 +970,6 @@ export function pressureAdaptsWithoutInventingLiveObjects(input: {
   return !input.livePlan && !input.liveTask && !input.liveCard;
 }
 
-export type RecoveredSettingsProfileRhythmChrome = {
-  preferredRhythm?: string;
-  preferredLearningMode?: string;
-  memoryScope?: string;
-  reviewCadence?: string;
-  workingSetMode?: string;
-  reviewReminderMode?: string;
-};
-
-export function preferRecoveredSettingsProfileRhythm(input: {
-  recovered?: boolean;
-  runtimeCurrentStep?: string;
-  preferredRhythm?: string;
-  preferredLearningMode?: string;
-  memoryScope?: string;
-  reviewCadence?: string;
-  workingSetMode?: string;
-  reviewReminderMode?: string;
-}): RecoveredSettingsProfileRhythmChrome {
-  if (leftoverSettingsProfileRhythmIsNotLive(input)) {
-    return {};
-  }
-  return {
-    preferredRhythm: text(input.preferredRhythm) || undefined,
-    preferredLearningMode: text(input.preferredLearningMode) || undefined,
-    memoryScope: text(input.memoryScope) || undefined,
-    reviewCadence: text(input.reviewCadence) || undefined,
-    workingSetMode: text(input.workingSetMode) || undefined,
-    reviewReminderMode: text(input.reviewReminderMode) || undefined,
-  };
-}
-
-export type RecoveredSettingsLearnerProjectOnboardingChrome = {
-  learnerName?: string;
-  targetProject?: string;
-  onboardingRequest?: string;
-  projectContext?: string;
-};
-
-export function preferRecoveredSettingsLearnerProjectOnboarding(input: {
-  recovered?: boolean;
-  runtimeCurrentStep?: string;
-  learnerName?: string;
-  targetProject?: string;
-  onboardingRequest?: string;
-  projectContext?: string;
-}): RecoveredSettingsLearnerProjectOnboardingChrome {
-  if (leftoverSettingsLearnerProjectOnboardingIsNotLive(input)) {
-    return {};
-  }
-  return {
-    learnerName: text(input.learnerName) || undefined,
-    targetProject: text(input.targetProject) || undefined,
-    onboardingRequest: text(input.onboardingRequest) || undefined,
-    projectContext: text(input.projectContext) || undefined,
-  };
-}
-
-export type RecoveredResourceSelectedDetailChrome = {
-  title?: string;
-  summary?: string;
-  matchSummary?: string;
-};
-
-export function preferRecoveredResourceSelectedDetail(input: {
-  recovered?: boolean;
-  runtimeCurrentStep?: string;
-  runtimePlanId?: string;
-  planId?: string;
-  planCurrentStep?: string;
-  title?: string;
-  summary?: string;
-  matchSummary?: string;
-}): RecoveredResourceSelectedDetailChrome {
-  const runtimeStep = text(input.runtimeCurrentStep);
-  const omitLeftover = (value?: string): string => {
-    const candidate = text(value);
-    if (!candidate) {
-      return "";
-    }
-    if (input.recovered && !runtimeStep) {
-      return "";
-    }
-    if (input.recovered && candidate !== runtimeStep) {
-      return "";
-    }
-    return candidate;
-  };
-  if (leftoverResourceSelectedDetailIsNotLive(input)) {
-    return {};
-  }
-  return {
-    title: omitLeftover(input.title) || undefined,
-    summary: omitLeftover(input.summary) || undefined,
-    matchSummary: omitLeftover(input.matchSummary) || undefined,
-  };
-}
-
 export function liveTrainingNextChallengeTitle(input: {
   recovered?: boolean;
   runtimeCurrentStep?: string;
@@ -1342,17 +1220,6 @@ export interface PlanOrientationRecord {
   revision: number;
 }
 
-const ACTIONS = new Set<PlanOrientationAction>([
-  "generate_plan",
-  "continue_without_plan",
-  "adopt_evidence",
-  "clear_blocker",
-  "continue_step",
-  "open_training",
-  "unfreeze_plan",
-  "wait",
-]);
-
 function text(value: string | undefined): string {
   return value?.trim() ?? "";
 }
@@ -1371,54 +1238,6 @@ function record(
     advancedWhere: input.advancedWhere,
     source: "snapshot",
     revision: input.revision ?? 1,
-  };
-}
-
-export function normalizePlanOrientationRecord(value: unknown): PlanOrientationRecord | undefined {
-  if (!value || typeof value !== "object") {
-    return undefined;
-  }
-  const row = value as Record<string, unknown>;
-  const objectLabel = text(typeof row.objectLabel === "string" ? row.objectLabel : typeof row.object_label === "string" ? row.object_label : "");
-  const state = text(typeof row.state === "string" ? row.state : "");
-  const why = text(typeof row.why === "string" ? row.why : "");
-  const primaryAction = text(
-    typeof row.primaryAction === "string"
-      ? row.primaryAction
-      : typeof row.primary_action === "string"
-        ? row.primary_action
-        : "",
-  ) as PlanOrientationAction;
-  const primaryActionLabel = text(
-    typeof row.primaryActionLabel === "string"
-      ? row.primaryActionLabel
-      : typeof row.primary_action_label === "string"
-        ? row.primary_action_label
-        : "",
-  );
-  const nextStep = text(
-    typeof row.nextStep === "string" ? row.nextStep : typeof row.next_step === "string" ? row.next_step : "",
-  );
-  if (!objectLabel || !state || !why || !ACTIONS.has(primaryAction) || !nextStep) {
-    return undefined;
-  }
-  return {
-    objectKind: "plan",
-    objectLabel,
-    state: state as CoachOrientationState,
-    why,
-    primaryAction,
-    primaryActionLabel,
-    nextStep,
-    advancedWhere: text(
-      typeof row.advancedWhere === "string"
-        ? row.advancedWhere
-        : typeof row.advanced_where === "string"
-          ? row.advanced_where
-          : "",
-    ),
-    source: "snapshot",
-    revision: typeof row.revision === "number" && row.revision > 0 ? Math.floor(row.revision) : 1,
   };
 }
 
@@ -1612,10 +1431,6 @@ function derivePlanOrientationBase(input: PlanOrientationInput): PlanOrientation
       (verify[0] ? copy.thenVerify(verify[0]) : copy.finishThenVerify),
     advancedWhere: copy.planCurrentStep,
   });
-}
-
-export function planOrientationTone(state: CoachOrientationState): ReturnType<typeof coachOrientationTone> {
-  return coachOrientationTone(state);
 }
 
 export type RecoveredPlanResumeAction = "continue_step" | "clear_blocker";

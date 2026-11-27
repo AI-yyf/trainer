@@ -8,11 +8,16 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from ..core.event_ledger import (
+    EVENT_ACTIVE_CARD_SELECTED,
     EVENT_CARD_MARKED_IMPORTANT,
     EVENT_CARD_MERGED,
     EVENT_CARD_PRIORITY_ADJUSTED,
     EVENT_CARD_STATUS_TRANSITIONED,
+    EVENT_EVIDENCE_ADOPTED,
+    EVENT_EVIDENCE_ENQUEUED,
+    EVENT_EVIDENCE_REJECTED,
     EVENT_PRACTICE_SUBMISSION_RECORDED,
+    EVENT_WORKSPACE_RESET,
 )
 from ..core.models import (
     ActiveCardSelectionResult,
@@ -69,7 +74,9 @@ logger = logging.getLogger(__name__)
 
 class CardsAndEvidenceMixin:
     if TYPE_CHECKING:
+        _canonical_workspace_id: Any
         _card_ledger: Any
+        _event_ledger: Any
         _dependency_mastery_snapshots: Any
         _ensure_stage_progress: Any
         _leftover_persist_context: Any
@@ -124,6 +131,19 @@ class CardsAndEvidenceMixin:
         )
         self._persist_structured(workspace_id)
         self._card_ledger = [entry for entry in self._card_ledger if entry.get("workspace_id") != workspace_id]
+        if self._event_ledger is not None:
+            canonical_ws = self._canonical_workspace_id(workspace_id)
+            try:
+                self._event_ledger.record_event(
+                    EVENT_WORKSPACE_RESET,
+                    actor="learner",
+                    scope="workspace",
+                    project_id=canonical_ws,
+                    workspace_id=canonical_ws,
+                    payload_ref={"workspace_id": canonical_ws, "retain_resources": True},
+                )
+            except Exception:
+                logger.exception("Could not record workspace reset in the event ledger")
         return {"workspace_id": workspace_id, "ok": True}
 
     def _build_flash_deck_snapshot(self, structured: StructuredMemoryService) -> FlashDeckSnapshot:
@@ -567,6 +587,19 @@ class CardsAndEvidenceMixin:
             },
         )
         self._persist_structured(workspace_id)
+        if self._event_ledger is not None:
+            canonical_ws = self._canonical_workspace_id(workspace_id)
+            try:
+                self._event_ledger.record_event(
+                    EVENT_ACTIVE_CARD_SELECTED,
+                    actor="learner",
+                    scope="training",
+                    project_id=canonical_ws,
+                    workspace_id=canonical_ws,
+                    payload_ref={"card_id": selection.selected_card_id or ""},
+                )
+            except Exception:
+                logger.exception("Could not record active card selection in the event ledger")
         return selection
 
     def transition_card_status(
@@ -719,9 +752,13 @@ class CardsAndEvidenceMixin:
             },
         )
         self._persist_structured(workspace_id)
-        if new_status == "active":
+        if new_status in {"active", "completed", "implemented", "skipped", "archived"}:
             self._record_persisted_card_activity(
-                workspace_id, updated, EVENT_CARD_STATUS_TRANSITIONED, event["event_id"], "started",
+                workspace_id,
+                updated,
+                EVENT_CARD_STATUS_TRANSITIONED,
+                event["event_id"],
+                "started" if new_status == "active" else new_status,
             )
         return CardStatusTransitionResponse(card=updated, ledger_entry=ledger_entry)
 
@@ -984,6 +1021,20 @@ class CardsAndEvidenceMixin:
         except Exception:
             structured._evidence_items.pop(normalized.id, None)
             raise
+        if self._event_ledger is not None:
+            canonical_ws = self._canonical_workspace_id(workspace_id)
+            try:
+                self._event_ledger.record_event(
+                    EVENT_EVIDENCE_ENQUEUED,
+                    actor="system" if verified else "learner",
+                    scope="training",
+                    project_id=canonical_ws,
+                    workspace_id=canonical_ws,
+                    payload_ref={"evidence_id": normalized.id, "verified": verified},
+                    idempotency_key=f"evidence_enqueued:{normalized.id}",
+                )
+            except Exception:
+                logger.exception("Could not record enqueued evidence in the event ledger")
         return normalized
 
     def latest_handoff_evidence(
@@ -1127,6 +1178,20 @@ class CardsAndEvidenceMixin:
         if independent_evidence:
             self._record_adopted_return_transfer(workspace_id, adopted)
             self._persist_structured(workspace_id)
+            if self._event_ledger is not None:
+                canonical_ws = self._canonical_workspace_id(workspace_id)
+                try:
+                    self._event_ledger.record_event(
+                        EVENT_EVIDENCE_ADOPTED,
+                        actor="learner",
+                        scope="training",
+                        project_id=canonical_ws,
+                        workspace_id=canonical_ws,
+                        payload_ref={"evidence_id": adopted.id, "independent": True},
+                        idempotency_key=f"evidence_adopted:{adopted.id}",
+                    )
+                except Exception:
+                    logger.exception("Could not record adopted evidence in the event ledger")
             return EvidenceAdoptResponse(
                 evidence=adopted,
                 plan_updated=False,
@@ -1253,6 +1318,20 @@ class CardsAndEvidenceMixin:
                     },
                 )
         self._persist_structured(workspace_id)
+        if self._event_ledger is not None:
+            canonical_ws = self._canonical_workspace_id(workspace_id)
+            try:
+                self._event_ledger.record_event(
+                    EVENT_EVIDENCE_ADOPTED,
+                    actor="learner",
+                    scope="training",
+                    project_id=canonical_ws,
+                    workspace_id=canonical_ws,
+                    payload_ref={"evidence_id": adopted.id, "plan_updated": plan_updated},
+                    idempotency_key=f"evidence_adopted:{adopted.id}",
+                )
+            except Exception:
+                logger.exception("Could not record adopted evidence in the event ledger")
         return EvidenceAdoptResponse(
             evidence=adopted,
             plan_updated=plan_updated,
@@ -1273,6 +1352,20 @@ class CardsAndEvidenceMixin:
         structured._evidence_items[evidence_id] = rejected
         self._persist_structured(workspace_id)
         self._sync_live_evidence_binding(workspace_id)
+        if self._event_ledger is not None:
+            canonical_ws = self._canonical_workspace_id(workspace_id)
+            try:
+                self._event_ledger.record_event(
+                    EVENT_EVIDENCE_REJECTED,
+                    actor="learner",
+                    scope="training",
+                    project_id=canonical_ws,
+                    workspace_id=canonical_ws,
+                    payload_ref={"evidence_id": rejected.id, "reason": reason},
+                    idempotency_key=f"evidence_rejected:{rejected.id}",
+                )
+            except Exception:
+                logger.exception("Could not record rejected evidence in the event ledger")
         return rejected
 
     def defer_evidence(self, workspace_id: str, evidence_id: str, reason: str = "") -> EvidenceItem:

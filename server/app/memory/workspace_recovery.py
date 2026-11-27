@@ -1,30 +1,7 @@
-"""Fail-closed workspace recovery for plan, provider last-test, and streams.
-
-These records live on structured workspace memory — the same DB path as
-training reliability, coach orientation, and transfer state. Incomplete
-records are never treated as success. API keys are never stored.
-"""
+"""Fail-closed workspace recovery surface re-exports."""
 
 from __future__ import annotations
 
-from .workspace_recovery_domains.evidence_and_scope import (
-    RESUME_FAILURE_STOP_REASONS as RESUME_FAILURE_STOP_REASONS,
-)
-from .workspace_recovery_domains.evidence_and_scope import (
-    STRUCTURED_STEP_FINISHED_KEYS as STRUCTURED_STEP_FINISHED_KEYS,
-)
-from .workspace_recovery_domains.evidence_and_scope import (
-    STRUCTURED_STEP_FINISHED_TOKENS as STRUCTURED_STEP_FINISHED_TOKENS,
-)
-from .workspace_recovery_domains.evidence_and_scope import (
-    WAITING_VERIFY_EVIDENCE_SOURCE as WAITING_VERIFY_EVIDENCE_SOURCE,
-)
-from .workspace_recovery_domains.evidence_and_scope import (
-    _evidence_field as _evidence_field,
-)
-from .workspace_recovery_domains.evidence_and_scope import (
-    _model_payload as _model_payload,
-)
 from .workspace_recovery_domains.evidence_and_scope import (
     accept_in_progress_plan_runtime_turn as accept_in_progress_plan_runtime_turn,
 )
@@ -65,13 +42,7 @@ from .workspace_recovery_domains.evidence_and_scope import (
     build_waiting_verify_evidence as build_waiting_verify_evidence,
 )
 from .workspace_recovery_domains.evidence_and_scope import (
-    extract_structured_next_step_runtime_facts as extract_structured_next_step_runtime_facts,
-)
-from .workspace_recovery_domains.evidence_and_scope import (
     extract_structured_plan_runtime_facts as extract_structured_plan_runtime_facts,
-)
-from .workspace_recovery_domains.evidence_and_scope import (
-    extract_structured_verify_method as extract_structured_verify_method,
 )
 from .workspace_recovery_domains.evidence_and_scope import (
     normalize_latest_adaptation_guide as normalize_latest_adaptation_guide,
@@ -169,12 +140,6 @@ from .workspace_recovery_domains.evidence_and_scope import (
 from .workspace_recovery_domains.evidence_and_scope import (
     select_streaming_checkpoint_for_scope as select_streaming_checkpoint_for_scope,
 )
-from .workspace_recovery_domains.evidence_and_scope import (
-    structured_plan_step_finished as structured_plan_step_finished,
-)
-from .workspace_recovery_domains.evidence_and_scope import (
-    verified_adopt_allows_runtime_advance as verified_adopt_allows_runtime_advance,
-)
 from .workspace_recovery_domains.plan_persist_chrome import (
     ADAPTATION_GUIDE_KEY as ADAPTATION_GUIDE_KEY,
 )
@@ -218,13 +183,7 @@ from .workspace_recovery_domains.plan_persist_chrome import (
     PROVIDER_CAPABILITY_KEY as PROVIDER_CAPABILITY_KEY,
 )
 from .workspace_recovery_domains.plan_persist_chrome import (
-    SECRET_KEYS as SECRET_KEYS,
-)
-from .workspace_recovery_domains.plan_persist_chrome import (
     STREAMING_CHECKPOINT_KEY as STREAMING_CHECKPOINT_KEY,
-)
-from .workspace_recovery_domains.plan_persist_chrome import (
-    STREAMING_PHASES as STREAMING_PHASES,
 )
 from .workspace_recovery_domains.plan_persist_chrome import (
     TEACHING_DECISION_KEY as TEACHING_DECISION_KEY,
@@ -234,21 +193,6 @@ from .workspace_recovery_domains.plan_persist_chrome import (
 )
 from .workspace_recovery_domains.plan_persist_chrome import (
     TRAINING_CHROME_KEY as TRAINING_CHROME_KEY,
-)
-from .workspace_recovery_domains.plan_persist_chrome import (
-    _formal_plan_candidate_focus as _formal_plan_candidate_focus,
-)
-from .workspace_recovery_domains.plan_persist_chrome import (
-    _recovered_overlay_empty_step as _recovered_overlay_empty_step,
-)
-from .workspace_recovery_domains.plan_persist_chrome import (
-    _revision as _revision,
-)
-from .workspace_recovery_domains.plan_persist_chrome import (
-    _text as _text,
-)
-from .workspace_recovery_domains.plan_persist_chrome import (
-    _verify_plan_advance_payload as _verify_plan_advance_payload,
 )
 from .workspace_recovery_domains.plan_persist_chrome import (
     bound_plan_leftover_training_live_identity_updates as bound_plan_leftover_training_live_identity_updates,
@@ -320,13 +264,7 @@ from .workspace_recovery_domains.plan_persist_chrome import (
     leftover_task_guide_focus_is_not_live as leftover_task_guide_focus_is_not_live,
 )
 from .workspace_recovery_domains.plan_persist_chrome import (
-    leftover_training_focus_chrome_is_not_live as leftover_training_focus_chrome_is_not_live,
-)
-from .workspace_recovery_domains.plan_persist_chrome import (
     leftover_training_handoff_chrome_is_not_live as leftover_training_handoff_chrome_is_not_live,
-)
-from .workspace_recovery_domains.plan_persist_chrome import (
-    leftover_transfer_skill_has_real_multi_scene_proof as leftover_transfer_skill_has_real_multi_scene_proof,
 )
 from .workspace_recovery_domains.plan_persist_chrome import (
     leftover_transfer_skill_is_not_live as leftover_transfer_skill_is_not_live,
@@ -339,9 +277,6 @@ from .workspace_recovery_domains.plan_persist_chrome import (
 )
 from .workspace_recovery_domains.plan_persist_chrome import (
     live_evidence_binding as live_evidence_binding,
-)
-from .workspace_recovery_domains.plan_persist_chrome import (
-    live_plan_artifact_stage_chrome as live_plan_artifact_stage_chrome,
 )
 from .workspace_recovery_domains.plan_persist_chrome import (
     live_plan_blocked_reason as live_plan_blocked_reason,
@@ -385,33 +320,6 @@ from .workspace_recovery_domains.plan_persist_chrome import (
 from .workspace_recovery_domains.plan_persist_chrome import (
     stamp_workspace_scope as stamp_workspace_scope,
 )
-from .workspace_recovery_domains.plan_persist_chrome import (
-    strip_secrets as strip_secrets,
-)
-from .workspace_recovery_domains.plan_persist_chrome import (
-    utc_now_iso as utc_now_iso,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    _plan_identity_fields as _plan_identity_fields,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    _plan_runtime_identity as _plan_runtime_identity,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    _runtime_for_formal_plan_persist as _runtime_for_formal_plan_persist,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    _runtime_still_on_formal_plan as _runtime_still_on_formal_plan,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    _same_identity as _same_identity,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    _structured_string_list as _structured_string_list,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    _without_leftover_formal_identity as _without_leftover_formal_identity,
-)
 from .workspace_recovery_domains.runtime_recovery import (
     apply_live_training_mint_to_card as apply_live_training_mint_to_card,
 )
@@ -431,37 +339,10 @@ from .workspace_recovery_domains.runtime_recovery import (
     coach_focus_runtime_from_snapshot as coach_focus_runtime_from_snapshot,
 )
 from .workspace_recovery_domains.runtime_recovery import (
-    evidence_bound_to_runtime_step as evidence_bound_to_runtime_step,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    evidence_item_concepts as evidence_item_concepts,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    evidence_item_workspace_id as evidence_item_workspace_id,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    is_current_for_provider as is_current_for_provider,
-)
-from .workspace_recovery_domains.runtime_recovery import (
     is_current_for_workspace as is_current_for_workspace,
 )
 from .workspace_recovery_domains.runtime_recovery import (
     is_interrupted_streaming_checkpoint as is_interrupted_streaming_checkpoint,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    live_runtime_frozen as live_runtime_frozen,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    live_runtime_next_text as live_runtime_next_text,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    live_runtime_next_verify_method as live_runtime_next_verify_method,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    live_runtime_plan_id as live_runtime_plan_id,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    normalize_formal_plan_identity as normalize_formal_plan_identity,
 )
 from .workspace_recovery_domains.runtime_recovery import (
     normalize_provider_capability_recovery as normalize_provider_capability_recovery,
@@ -470,13 +351,7 @@ from .workspace_recovery_domains.runtime_recovery import (
     normalize_streaming_checkpoint as normalize_streaming_checkpoint,
 )
 from .workspace_recovery_domains.runtime_recovery import (
-    normalize_training_chrome as normalize_training_chrome,
-)
-from .workspace_recovery_domains.runtime_recovery import (
     overlay_plan_runtime_current_stage as overlay_plan_runtime_current_stage,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    overlay_plan_runtime_display_facts as overlay_plan_runtime_display_facts,
 )
 from .workspace_recovery_domains.runtime_recovery import (
     recover_streaming_checkpoint_after_restart as recover_streaming_checkpoint_after_restart,
@@ -507,72 +382,6 @@ from .workspace_recovery_domains.runtime_recovery import (
 )
 from .workspace_recovery_domains.runtime_recovery import (
     training_record_matches_workspace as training_record_matches_workspace,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _MEMORY_LIVE_TEXT_KEYS as _MEMORY_LIVE_TEXT_KEYS,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _REVIEW_ARTIFACT_LIVE_TEXT_KEYS as _REVIEW_ARTIFACT_LIVE_TEXT_KEYS,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _SCENARIO_LAB_LIVE_LIST_KEYS as _SCENARIO_LAB_LIVE_LIST_KEYS,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _SCENARIO_LAB_LIVE_TEXT_KEYS as _SCENARIO_LAB_LIVE_TEXT_KEYS,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _THEORY_DRILL_LIVE_TEXT_KEYS as _THEORY_DRILL_LIVE_TEXT_KEYS,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _THEORY_DRILL_QUESTION_LIVE_TEXT_KEYS as _THEORY_DRILL_QUESTION_LIVE_TEXT_KEYS,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _TRAINING_CARD_LIVE_LIST_KEYS as _TRAINING_CARD_LIVE_LIST_KEYS,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _TRAINING_CARD_LIVE_TEXT_KEYS as _TRAINING_CARD_LIVE_TEXT_KEYS,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _gate_embedded_texts as _gate_embedded_texts,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _gate_flash_deck_payload as _gate_flash_deck_payload,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _gate_memory_thread_fields as _gate_memory_thread_fields,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _gate_record_list_fields as _gate_record_list_fields,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _gate_record_title_fields as _gate_record_title_fields,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _gate_review_artifact_history as _gate_review_artifact_history,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _gate_review_artifact_payload as _gate_review_artifact_payload,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _gate_scenario_lab_history as _gate_scenario_lab_history,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _gate_scenario_lab_payload as _gate_scenario_lab_payload,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _gate_theory_drill_history as _gate_theory_drill_history,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _gate_theory_drill_payload as _gate_theory_drill_payload,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _gate_theory_drill_question as _gate_theory_drill_question,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _gate_training_card_payload as _gate_training_card_payload,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    _replace_leftover_live_text as _replace_leftover_live_text,
 )
 from .workspace_recovery_domains.snapshot_and_overlay import (
     live_coaching_next_step as live_coaching_next_step,
@@ -618,9 +427,6 @@ from .workspace_recovery_domains.snapshot_and_overlay import (
 )
 from .workspace_recovery_domains.snapshot_and_overlay import (
     live_task_label as live_task_label,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    live_task_next_action as live_task_next_action,
 )
 from .workspace_recovery_domains.snapshot_and_overlay import (
     live_task_picked_copy as live_task_picked_copy,
