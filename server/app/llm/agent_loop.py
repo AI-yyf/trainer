@@ -44,7 +44,7 @@ import json
 import logging
 import math
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Awaitable, Callable, cast
+from typing import Any, AsyncIterator, Awaitable, Callable, NoReturn, cast
 
 from .harness import (
     DEFAULT_TOOL_OUTPUT_LIMIT,
@@ -111,6 +111,59 @@ class AgentLoopError(RuntimeError):
     """Raised when the agent loop cannot make any progress."""
 
 
+class ProviderStreamStalledError(asyncio.TimeoutError):
+    """No provider event arrived for the idle budget: the stream is dead, not slow.
+
+    A timeout (it is handled like a step timeout), but distinct so the turn can say "stalled"
+    instead of "exceeded its budget".
+    """
+
+    def __init__(self, idle_seconds: float | None) -> None:
+        super().__init__(f"no provider event for {idle_seconds:g}s" if idle_seconds else "stalled")
+        self.idle_seconds = idle_seconds
+
+
+class FirstOutputBudgetExceeded(Exception):
+    """A step produced nothing within the first-output budget while the learner had seen no text.
+
+    Reasoning-first models stream hidden reasoning for as long as they like: one measured turn
+    spent 65 s on 1,317 reasoning tokens before its first tool call, another 18.5 s before the
+    answer that followed its tool calls (2026-11-28). A step's wall clock allows that; the learner,
+    who is still waiting for a first word, should not have to.
+    """
+
+    def __init__(self, budget_seconds: float) -> None:
+        super().__init__(f"no learner-visible output for {budget_seconds:g}s")
+        self.budget_seconds = budget_seconds
+
+
+# Appended to the last system message of the retried first step only (never stored in the history
+# the later steps or the session see).
+FIRST_OUTPUT_RESTART_HINT = (
+    "The previous attempt for this turn was stopped because it produced nothing for the learner "
+    "within {budget:g} seconds. Do not deliberate further: give your reply now, or make the tool "
+    "call you need now, and keep the reply short."
+)
+
+
+def _messages_with_restart_hint(
+    messages: list[dict[str, Any]], budget_seconds: float
+) -> list[dict[str, Any]]:
+    """A copy of ``messages`` whose last system message carries the restart hint."""
+
+    hinted = [dict(message) for message in messages]
+    for index in range(len(hinted) - 1, -1, -1):
+        message = hinted[index]
+        if str(message.get("role") or "") not in {"system", "control"}:
+            continue
+        content = message.get("content")
+        text = content if isinstance(content, str) else ""
+        hint = FIRST_OUTPUT_RESTART_HINT.format(budget=budget_seconds)
+        hinted[index] = {**message, "content": f"{text}\n\n{hint}" if text.strip() else hint}
+        return hinted
+    return [{"role": "system", "content": FIRST_OUTPUT_RESTART_HINT.format(budget=budget_seconds)}, *hinted]
+
+
 # -- The provider hook signature --------------------------------------------
 #
 # The loop only needs three concrete capabilities from the provider:
@@ -175,16 +228,35 @@ async def _iterate_with_stream_cancellation(
     cancel_event: asyncio.Event | None,
     *,
     step_timeout: float | None = None,
+    idle_timeout: float | None = None,
+    first_output_budget: float | None = None,
+    has_output: Callable[[], bool] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
-    """Yield provider events while making cancellation and step timeouts close the upstream iterator."""
+    """Yield provider events while cancellation, step timeouts, stalls and the first-output
+    budget close the upstream iterator.
+
+    ``step_timeout`` bounds the whole step. ``idle_timeout`` bounds the gap between two provider
+    events: a stream silent for that long is dead, not slow, and is reported as a stall even when
+    the step's own budget would still allow it. ``first_output_budget`` bounds the time before
+    ``has_output()`` first turns true (learner-visible text or a finished model message); after
+    that the step is bound only by its own timeouts.
+    """
 
     iterator = stream.__aiter__()
     iterator_closed = False
     iterator_exhausted = False
     loop = asyncio.get_running_loop()
+    started = loop.time()
     deadline = (
-        loop.time() + step_timeout
+        started + step_timeout
         if step_timeout is not None and step_timeout > 0
+        else None
+    )
+    idle_seconds = float(idle_timeout) if idle_timeout is not None and idle_timeout > 0 else None
+    idle_deadline = started + idle_seconds if idle_seconds is not None else None
+    output_deadline = (
+        started + first_output_budget
+        if first_output_budget is not None and first_output_budget > 0 and has_output is not None
         else None
     )
 
@@ -201,24 +273,58 @@ async def _iterate_with_stream_cancellation(
                 if "asynchronous generator is already running" not in str(exc):
                     raise
 
+    def waiting_for_output() -> bool:
+        assert has_output is not None and output_deadline is not None
+        return not has_output()
+
+    def remaining() -> float | None:
+        now = loop.time()
+        bounds = [
+            bound - now
+            for bound, active in (
+                (deadline, True),
+                (idle_deadline, True),
+                (output_deadline, output_deadline is not None and waiting_for_output()),
+            )
+            if active and bound is not None
+        ]
+        return min(bounds) if bounds else None
+
+    async def fail_closed(budget: float | None) -> NoReturn:
+        # Close the upstream stream first, then say which budget ended the step.
+        await close_iterator()
+        now = loop.time()
+        if (
+            output_deadline is not None
+            and first_output_budget is not None
+            and waiting_for_output()
+            and now >= output_deadline
+        ):
+            raise FirstOutputBudgetExceeded(float(first_output_budget))
+        if idle_deadline is not None and now >= idle_deadline:
+            raise ProviderStreamStalledError(idle_seconds)
+        raise asyncio.TimeoutError
+
     try:
         while True:
-            remaining = (deadline - loop.time()) if deadline is not None else None
-            if remaining is not None and remaining <= 0:
-                await close_iterator()
-                raise asyncio.TimeoutError
+            left = remaining()
+            if left is not None and left <= 0:
+                await fail_closed(left)
             if cancel_event is None:
                 try:
-                    if remaining is None:
-                        yield await iterator.__anext__()
+                    if left is None:
+                        item = await iterator.__anext__()
                     else:
-                        yield await asyncio.wait_for(iterator.__anext__(), timeout=remaining)
+                        item = await asyncio.wait_for(iterator.__anext__(), timeout=left)
                 except StopAsyncIteration:
                     iterator_exhausted = True
                     return
                 except asyncio.TimeoutError:
-                    await close_iterator()
-                    raise
+                    await fail_closed(left)
+                if idle_deadline is not None:
+                    assert idle_seconds is not None
+                    idle_deadline = loop.time() + idle_seconds
+                yield item
                 continue
             if cancel_event.is_set():
                 await close_iterator()
@@ -228,24 +334,27 @@ async def _iterate_with_stream_cancellation(
             try:
                 done, _ = await asyncio.wait(
                     {next_event, cancellation},
-                    timeout=remaining,
+                    timeout=left,
                     return_when=asyncio.FIRST_COMPLETED,
                 )
                 if not done:
                     next_event.cancel()
                     await asyncio.gather(next_event, return_exceptions=True)
-                    await close_iterator()
-                    raise asyncio.TimeoutError
+                    await fail_closed(left)
                 if cancellation in done and cancel_event.is_set():
                     next_event.cancel()
                     await asyncio.gather(next_event, return_exceptions=True)
                     await close_iterator()
                     raise asyncio.CancelledError
                 try:
-                    yield next_event.result()
+                    item = next_event.result()
                 except StopAsyncIteration:
                     iterator_exhausted = True
                     return
+                if idle_deadline is not None:
+                    assert idle_seconds is not None
+                    idle_deadline = loop.time() + idle_seconds
+                yield item
             finally:
                 if not cancellation.done():
                     cancellation.cancel()
@@ -300,6 +409,18 @@ class CoachAgentLoop:
     DEFAULT_STEP_TIMEOUT_SECONDS = 24.0
     DEFAULT_FIRST_STEP_TIMEOUT_SECONDS = 90.0
     MIN_STEP_TIMEOUT_SECONDS = 1.0
+    # A stream silent this long between two events is dead. Generous, because a reasoning-first
+    # model may legitimately send nothing while it thinks; it only shortens how long a truly dead
+    # first step takes to be noticed (the step's own budget is 90 s).
+    DEFAULT_STREAM_IDLE_TIMEOUT_SECONDS = 60.0
+    # Until the learner has seen the first visible text of a turn, every step must produce something
+    # (text or a tool call) within this time. A reasoning model that is still deliberating gets one
+    # fresh attempt per turn with an explicit instruction to stop deliberating. 0 disables the
+    # restart. The second attempt is not unbounded: on a reasoning-first gateway steps carry no wall
+    # clock at all, so the restarted step is capped here.
+    DEFAULT_FIRST_OUTPUT_RESTART_SECONDS = 20.0
+    SECOND_ATTEMPT_MAX_SECONDS = 120.0
+    MIN_AUX_TIMEOUT_SECONDS = 5.0
     # Reasoning-first gateways can spend several minutes on a single step
     # before the first visible token, so the clamp must sit above the
     # generous kimi-like tier rather than below it.
@@ -314,8 +435,20 @@ class CoachAgentLoop:
         max_steps: int | None = None,
         step_timeout: float | None = None,
         first_step_timeout: float | None = None,
+        stream_idle_timeout: float | None = None,
+        first_output_restart_seconds: float | None = None,
     ) -> None:
         self.provider = provider
+        self.stream_idle_timeout = self._bounded_aux_timeout(
+            self.DEFAULT_STREAM_IDLE_TIMEOUT_SECONDS
+            if stream_idle_timeout is None
+            else stream_idle_timeout
+        )
+        self.first_output_restart_seconds = self._bounded_aux_timeout(
+            self.DEFAULT_FIRST_OUTPUT_RESTART_SECONDS
+            if first_output_restart_seconds is None
+            else first_output_restart_seconds
+        )
         self.registry = registry
         self.context = context
         resolved_max_steps = self.SAFETY_MAX_STEPS if max_steps is None else max_steps
@@ -551,6 +684,14 @@ class CoachAgentLoop:
         previous_step: AgentStep | None = None
         streamed_steps: list[AgentStep] = []
         index = 0
+        restart_step: int | None = None  # the step that was restarted in this turn, if any
+        restart_hint_budget = 0.0
+        turn_showed_text = False
+
+        def _has_output() -> bool:
+            # Late bound on purpose: read the current step's accumulators.
+            return provider_final_received or bool(streamed_text)
+
         self._prepare_next_turn(history)
         while True:
             if index >= self.max_steps:
@@ -581,6 +722,8 @@ class CoachAgentLoop:
             stream_provider_reasoning: dict[str, Any] | None = None
             provider_final_received = False
             step_timeout = self._step_timeout_for(index)
+            if restart_step == index:
+                step_timeout = min(step_timeout, self.SECOND_ATTEMPT_MAX_SECONDS)
             yield {"type": "step", "index": index, "stop_reason": None}
 
             stream_fn = self.provider.call_stream
@@ -610,11 +753,25 @@ class CoachAgentLoop:
                 }
                 return
             else:
+                # The retried step carries the restart hint; history itself never does.
+                step_messages = (
+                    _messages_with_restart_hint(history, restart_hint_budget)
+                    if restart_step == index
+                    else history
+                )
+                first_output_budget = (
+                    self.first_output_restart_seconds
+                    if restart_step is None and not turn_showed_text
+                    else None
+                )
                 try:
                     async for event in _iterate_with_stream_cancellation(
-                        stream_fn(history, tools_schema),
+                        stream_fn(step_messages, tools_schema),
                         cancel_event,
                         step_timeout=step_timeout,
+                        idle_timeout=self.stream_idle_timeout,
+                        first_output_budget=first_output_budget,
+                        has_output=_has_output,
                     ):
                         if provider_final_received:
                             continue
@@ -650,20 +807,42 @@ class CoachAgentLoop:
                             provider_final_received = True
                         else:
                             yield event
-                except asyncio.TimeoutError:
+                except FirstOutputBudgetExceeded as exc:
+                    # The learner is still waiting for a first word and the model is still
+                    # deliberating: drop the attempt and ask once more, this time with an
+                    # instruction to stop deliberating. Once per turn.
+                    restart_step = index
+                    restart_hint_budget = exc.budget_seconds
+                    logger.info(
+                        "agent_stream_first_output_restart",
+                        extra={"step": index, "budget_seconds": exc.budget_seconds},
+                    )
+                    yield {
+                        "type": "stream_restart",
+                        "reason": "first_output_budget",
+                        "after_seconds": exc.budget_seconds,
+                    }
+                    continue
+                except asyncio.TimeoutError as exc:
                     summary, next_step = _build_runtime_failure_recovery(
                         "timeout",
                         context=self.context,
                         response_language=self.context.response_language,
                         previous_step=previous_step,
                     )
+                    stalled = isinstance(exc, ProviderStreamStalledError)
                     yield {
                         "type": "final",
                         "content": assistant_text or _visible_text_from_steps(streamed_steps, summary, next_step),
                         "summary": summary,
                         "next_step": next_step,
                         "stop_reason": "timeout",
-                        "error": f"agent step {index} exceeded {step_timeout}s",
+                        "error": (
+                            f"agent step {index} stalled: {exc}"
+                            if stalled
+                            else f"agent step {index} exceeded {step_timeout}s"
+                        ),
+                        "stalled": stalled,
                     }
                     return
                 except Exception as exc:
@@ -700,6 +879,7 @@ class CoachAgentLoop:
                     }
                     return
 
+            turn_showed_text = turn_showed_text or bool(streamed_text)
             history.append(
                 _assistant_message(
                     assistant_text,
@@ -975,6 +1155,13 @@ class CoachAgentLoop:
 
     def _step_timeout_for(self, index: int) -> float:
         return self.first_step_timeout if index == 0 else self.step_timeout
+
+    @classmethod
+    def _bounded_aux_timeout(cls, timeout: float) -> float:
+        # 0 switches the guard off; anything else stays within [5 s, 5 min].
+        if timeout <= 0:
+            return 0.0
+        return min(cls.MAX_STEP_TIMEOUT_SECONDS, max(cls.MIN_AUX_TIMEOUT_SECONDS, float(timeout)))
 
     def _extra(self) -> dict[str, Any]:
         extra = self.context.extra if isinstance(self.context.extra, dict) else {}

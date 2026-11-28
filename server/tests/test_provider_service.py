@@ -35,6 +35,7 @@ from app.llm.provider_service import (
     _NATURAL_LANGUAGE_PROBE_PROMPT,
     DEFAULT_OPENAI_CLIENT_MAX_RETRIES,
     DEFAULT_OPENAI_CLIENT_TIMEOUT_SECONDS,
+    GENERATION_READ_BACKSTOP_SECONDS,
     ProviderService,
     _build_agent_tool_context_extra,
     _build_language_corruption_recovery_override,
@@ -8053,10 +8054,11 @@ async def test_chat_completion_appends_v1_for_non_google_gemini_gateway_without_
     assert captured["api_key"] == "sk-test-key"
     assert "base_url" in captured
     assert captured["base_url"] == "https://gateway.example.com/v1"
-    # Generation client: reasoning carries NO designed read wall (httpx
-    # Timeout with read=None); connect/write/pool stay bounded for liveness.
+    # Generation client: reasoning carries no designed read wall. The only
+    # read bound is the transport backstop for a connection that goes silent;
+    # connect/write/pool stay bounded for liveness.
     assert "timeout" in captured
-    assert captured["timeout"].read is None
+    assert captured["timeout"].read == GENERATION_READ_BACKSTOP_SECONDS == 300.0
     assert captured["timeout"].connect == 10.0
     assert "max_retries" in captured
     assert captured["max_retries"] == DEFAULT_OPENAI_CLIENT_MAX_RETRIES

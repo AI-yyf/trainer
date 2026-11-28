@@ -88,11 +88,15 @@ LECTURE_OUTPUT_TOKENS = 4096
 # read-time ceiling: reasoning-first models think for as long as the task
 # needs, and a fixed read cap converts long reasoning into a false timeout
 # (measured: a 45s cap killed real MiniMax-M3.x card authoring twice in a
-# row). Liveness comes from connect/write/pool bounds and transport errors —
-# not from an arbitrary wall. Probe/control calls keep the bounded 45s via
-# per-request overrides.
+# row). Liveness comes from the stream guards (the agent loop's idle watchdog
+# and step budgets, the plain stream's idle ceiling) and from transport errors
+# — not from an arbitrary wall. The transport read timeout is only a last
+# resort for a path with no guard at all: five minutes without a single byte
+# from the provider is a dead connection, never a model still thinking.
+# Probe/control calls keep the bounded 45s via per-request overrides.
+GENERATION_READ_BACKSTOP_SECONDS = 300.0
 GENERATION_CLIENT_TIMEOUT = httpx.Timeout(
-    connect=10.0, write=60.0, pool=30.0, read=None
+    connect=10.0, write=60.0, pool=30.0, read=GENERATION_READ_BACKSTOP_SECONDS
 )
 #: Sentinel: a rejected request named no repairable parameter.
 _NOT_REPAIRED = object()

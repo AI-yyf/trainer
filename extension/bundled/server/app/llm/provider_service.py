@@ -191,6 +191,7 @@ from .provider.runtime_shared import (
     _NOT_REPAIRED,
     FORMAL_PLAN_OUTPUT_TOKENS,
     GENERATION_CLIENT_TIMEOUT,
+    GENERATION_READ_BACKSTOP_SECONDS,
     LECTURE_OUTPUT_TOKENS,
     MIN_OPENAI_CLIENT_TIMEOUT_SECONDS,
     logger,
@@ -745,9 +746,10 @@ class ProviderService(
             client_kwargs: dict[str, Any] = {
                 "api_key": self._effective_wire_api_key(self._config, self._api_key),
                 "base_url": base_url,
-                # Generation client: no designed read ceiling (see
-                # GENERATION_CLIENT_TIMEOUT). Probe/control callers that share
-                # this client pass a per-request bounded timeout instead.
+                # Generation client: no designed read ceiling beyond the
+                # transport backstop (see GENERATION_CLIENT_TIMEOUT). Probe and
+                # control callers that share this client pass a per-request
+                # bounded timeout instead.
                 "timeout": GENERATION_CLIENT_TIMEOUT,
                 "max_retries": self._provider_client_max_retries(),
             }
@@ -884,8 +886,10 @@ class ProviderService(
         # Reasoning-first gateways (kimi-k3, MiniMax-M3.x, deepseek-r1, …)
         # think for as long as the task needs — measured runs blow past every
         # fixed tier (24s/90s/120s/240s/300s) as a false timeout. Steps carry
-        # no designed wall-clock; liveness comes from the transport and the
-        # user's own cancel.
+        # no designed wall-clock. Liveness and pace come from the loop's own
+        # guards instead: a stream silent for 60 s is a stall, the first step
+        # must show the learner something within 20 s or is restarted once, and
+        # that second attempt is capped; the user's own cancel still applies.
         if _needs_generous_visible_probe_budget(self._config):
             return {"step_timeout": math.inf, "first_step_timeout": math.inf}
         return {}
@@ -2111,6 +2115,7 @@ __all__ = [
     '_NOT_REPAIRED',
     'FORMAL_PLAN_OUTPUT_TOKENS',
     'GENERATION_CLIENT_TIMEOUT',
+    'GENERATION_READ_BACKSTOP_SECONDS',
     'LECTURE_OUTPUT_TOKENS',
     'MIN_OPENAI_CLIENT_TIMEOUT_SECONDS',
     'logger',
