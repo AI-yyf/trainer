@@ -1218,42 +1218,6 @@ class CoachingReplyMixin:
             answer_mode=answer_mode,
             coach_context=coach_context,
         )
-        lead = _localized_text(
-            "The provider finished this turn without any visible coaching reply, so I am keeping the same learning lane moving locally.",
-            "",
-            response_language,
-        )
-        guided_lane_reply = _guided_domain_empty_reply(
-            message,
-            current_file=current_file,
-            coach_context=coach_context,
-            response_language=response_language,
-        )
-        if guided_lane_reply:
-            return f"{lead}\n\n{guided_lane_reply}"
-
-        if profile is not None:
-            scaffold = self._scaffold_reply(
-                profile,
-                message,
-                current_file=current_file,
-                response_language=response_language,
-                answer_mode=answer_mode,
-                coach_context=coach_context,
-            ).strip()
-            if scaffold:
-                return f"{lead}\n\n{scaffold}"
-
-        file_path = current_file.get("path") if current_file else None
-        if file_path:
-            return (
-                f"I am still with you. Re-anchor on `{file_path}`, restate the target behavior, "
-                "and tell me the one decision that feels most uncertain so we can reduce it to the next smallest verifiable step."
-            )
-        return (
-            "I am still with you. Re-anchor on the target behavior and tell me the one decision that feels most uncertain "
-            "so we can reduce it to the next smallest verifiable step."
-        )
 
     def _visible_empty_reply_guidance(
         self,

@@ -232,7 +232,19 @@ def test_p2_multiturn_kv_cache_prefix_stays_byte_stable() -> None:
     from app.core.models import UserProfile
     from app.llm.prompts import build_coaching_messages
 
-    profile = UserProfile(workspace_id="ws-kv", current_goal="Master async Python", current_level="intermediate")
+    # A real learner profile: every field below is a UserProfile field and reaches the prefix, so
+    # the assertion below proves the prefix is byte-stable while carrying a goal and a background.
+    # (The first version of this test passed three unknown kwargs, which pydantic's extra="ignore"
+    # dropped, so it only ever compared two all-default profiles.)
+    profile = UserProfile(
+        long_term_goal="Master async cancellation",
+        background="Backend developer new to asyncio",
+        weekly_hours=4,
+        teaching_style="guided",
+        answer_policy="guided",
+        target_project="async-demo",
+        preferred_libraries=["asyncio"],
+    )
     history = [
         {"role": "user", "content": "Explain asyncio.gather"},
         {"role": "assistant", "content": "asyncio.gather runs awaitables concurrently."},
@@ -249,7 +261,10 @@ def test_p2_multiturn_kv_cache_prefix_stays_byte_stable() -> None:
         coach_context={"active_focus": "asyncio.wait_for", "turn_note": "different dynamic note"},
         history=[*history, {"role": "user", "content": "How does cancellation work?"}, {"role": "assistant", "content": "Tasks cancel downstream."}],
     )
-    # messages[0] system prompt stays byte-for-byte identical across multi-turn dynamic context changes
+    # The profile really is in the prefix, and messages[0] stays byte-for-byte identical across
+    # multi-turn dynamic context changes.
+    assert "Master async cancellation" in turn_a[0]["content"]
+    assert "Backend developer new to asyncio" in turn_a[0]["content"]
     assert turn_a[0]["content"] == turn_b[0]["content"]
     assert "## Runtime Context" not in turn_a[0]["content"]
     assert turn_a[-1]["content"].startswith("How does cancellation work?")
