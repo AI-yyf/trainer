@@ -122,6 +122,8 @@ _ENGLISH_FUNCTION_WORDS = frozenset(
     ).split()
 )
 
+_CHINESE_TONE = {"steady": "平稳", "encouraging": "鼓励", "concise_rescue": "简短直接", "reflective": "引导反思"}
+
 # The remembered focus is a labelled memory sentence ("当前聚焦：…", "Current coaching focus: …").
 _FOCUS_LABEL_PATTERN = re.compile(r"^(?:当前聚焦点|当前聚焦|current coaching focus)\s*[:：]\s*", re.IGNORECASE)
 _SENTENCE_END = ("。", ".", "!", "！", "?", "？")
@@ -145,19 +147,19 @@ def _scaffold_anchor(
         return f"I will keep working along this live thread: {visible_focus}{closing}"
 
     if scenario == "remote_workspace":
-        base = "我们先把这一轮留在 VS Code remote 这条线上。" if chinese else (
+        base = "我们先把这一轮留在 VS Code 远程窗口这条线上。" if chinese else (
             "I will keep this turn in the VS Code remote lane."
         )
     elif scenario == "debug_loop":
-        base = "我们先把这一轮收束成一个可信的 debug loop。" if chinese else (
+        base = "我们先把这一轮收束成一个可信的调试循环。" if chinese else (
             "I will keep this turn inside one trustworthy debug loop."
         )
     elif scenario == "function_guidance":
-        base = "我们先把这一轮留在 function guidance 这条线上。" if chinese else (
+        base = "我们先把这一轮留在读函数这条线上。" if chinese else (
             "I will keep this turn in the function-guidance lane."
         )
     elif scenario == "project_adaptation":
-        base = "我们先沿着现有项目 adaptation 这条线继续。" if chinese else (
+        base = "我们先沿着改造现有项目这条线继续。" if chinese else (
             "I will keep this turn in the existing-project adaptation lane."
         )
     elif scenario == "principle":
@@ -213,7 +215,7 @@ def _scaffold_diagnosis(
 
     if diagnostics_count > 0:
         return (
-            f"当前文件里还有 {diagnostics_count} 条 diagnostics，先不要铺开，先恢复一条最小反馈链。"
+            f"当前文件里还有 {diagnostics_count} 条诊断信息，先不要铺开，先恢复一条最小反馈链。"
             if chinese
             else f"There are still {diagnostics_count} diagnostics in the current file, so I want one minimal feedback loop before we widen anything."
         )
@@ -244,19 +246,19 @@ def _scaffold_diagnosis(
 
     scenario_map = {
         "remote_workspace": (
-            "先把工作区边界说稳，再决定 remote 里的下一步。",
+            "先把工作区边界说稳，再决定远程环境里的下一步。",
             "The next useful move depends on proving the real workspace boundary first.",
         ),
         "debug_loop": (
-            "先把 debug 收束到一个 pause point、一个 value 和一个验证动作上。",
+            "先把调试收束到一个暂停点、一个变量值和一个验证动作上。",
             "The next useful move is to keep debugging inside one pause point, one observed value, and one verification move.",
         ),
         "function_guidance": (
-            "先把函数 contract 锚定在一个 live call site 上，再扩解释。",
+            "先把函数的约定锚定在一个真实调用点上，再扩解释。",
             "The next useful move is to anchor the function contract to one live call site before the explanation widens.",
         ),
         "project_adaptation": (
-            "先分清稳定面和变更面，再动第一条 adaptation 边界。",
+            "先分清稳定面和变更面，再动第一条改造边界。",
             "The next useful move is to separate the stable surface from the change surface before the first adaptation.",
         ),
         "principle": (
@@ -267,7 +269,7 @@ def _scaffold_diagnosis(
     zh, en = scenario_map.get(
         scenario,
         (
-            "这一轮先落一个最小可验证动作，把线程继续接稳。",
+            "这一轮先落一个最小可验证动作，把这条主线继续接稳。",
             "The next useful move is one small verifiable action that keeps the thread continuous.",
         ),
     )
@@ -286,19 +288,19 @@ def _scenario_step_text(
 
     if scenario == "remote_workspace":
         return (
-            "判断当前工作区是 SSH、tunnels、dev container、WSL 还是 local，再确认文件实际在哪台机器上"
+            "判断当前工作区是 SSH、隧道、dev container、WSL 还是本地，再确认文件实际在哪台机器上"
             if chinese
             else "identify whether the workspace is SSH, tunnels, dev container, WSL, or local, then prove which machine actually owns the files"
         )
     if scenario == "debug_loop":
         return (
-            "只复现一次，在第一个有意义的 breakpoint 停下，检查一个 value、branch 或 stack frame"
+            "只复现一次，在第一个有意义的断点停下，检查一个变量值、分支或调用栈帧"
             if chinese
             else "reproduce once, pause at the first meaningful breakpoint, and inspect one value, branch, or stack frame"
         )
     if scenario == "function_guidance":
         return (
-            "先从一个 live call site 读这个函数，再用 hover、signature help、definition 把 contract 读稳"
+            "先从一个真实调用点读这个函数，再用悬停提示、签名提示、跳转到定义把函数约定读稳"
             if chinese
             else "start from one live call site, then use hover, signature help, and definition until the contract stops moving"
         )
@@ -310,7 +312,7 @@ def _scenario_step_text(
         )
     if scenario == "principle":
         return (
-            f"把当前原理钉在一处 live code boundary 上，再做一个最小验证{file_suffix}"
+            f"把当前原理落在一处真实的代码边界上，再做一次最小验证{file_suffix}"
             if chinese
             else f"pin the current principle to one live code boundary and run one small verification{file_suffix}"
         )
@@ -381,7 +383,7 @@ def _scaffold_teaching_note(
         visible_rhythm = _surface_context_text(review_rhythm, chinese=chinese)
         if visible_rhythm:
             return (
-                f"这一步完成后，再按现在的 review rhythm 接着走：{visible_rhythm}。"
+                f"这一步完成后，再按现在的复习节奏接着走：{visible_rhythm}。"
                 if chinese
                 else f"After this move, continue with the current review rhythm: {visible_rhythm}."
             )
@@ -398,19 +400,20 @@ def _scaffold_teaching_note(
             else "I will keep this turn compact and stay on one line of coaching."
         )
     if tone_name:
-        return (
-            f"这一轮我会保持 {tone_name} 这类语气，但优先保证动作可验证。"
-            if chinese
-            else f"I will keep the {tone_name} tone, but I still want the move to stay verifiable."
-        )
+        # The tone is a coach decision named in English ("encouraging"); a Chinese learner reads
+        # what it means, and a tone without a Chinese name falls through to the defaults below.
+        if not chinese:
+            return f"I will keep the {tone_name} tone, but I still want the move to stay verifiable."
+        if tone_name in _CHINESE_TONE:
+            return f"这一轮我会保持{_CHINESE_TONE[tone_name]}的语气，但优先保证动作可验证。"
     if coach_defaults:
         return (
-            "我会继续沿着你已经设定好的教练偏好来带，不额外打开新的面。"
+            "我会继续沿着你已经设定好的教练偏好来带，不额外展开新的方向。"
             if chinese
             else "I will keep following your saved coaching defaults instead of opening a new lane."
         )
     return (
-        "这一步的重点不是讲更多，而是把线程继续接稳。"
+        "这一步的重点不是讲更多，而是把这条主线继续接稳。"
         if chinese
         else "The point of this turn is not more breadth; it is keeping the thread stable."
     )
