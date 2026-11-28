@@ -140,9 +140,9 @@ test("the context ring opens the flat provider/model list", async ({ page }) => 
   const active = page.locator(".composer-provider-list__item.is-active").first();
   await expect(active).toContainText("deepseek-v4.1-flash");
   await expect(page.locator(".composer-model-menu__vision").first()).toBeVisible();
-  await expect(page.locator(".composer-model-menu__thinking-badge").first()).toContainText(
-    "思考 最高",
-  );
+  // Thinking intensity is one provider-level slider at the bottom of the menu
+  // (f4713414 replaced the per-model thinking badges with it).
+  await expect(page.locator(".composer-model-menu__thinking-range").first()).toBeVisible();
 
   // Other saved providers are groups, not a hidden "saved connections" fold.
   await expect(page.locator(".composer-model-menu__provider-group")).toHaveCount(2);
@@ -153,9 +153,6 @@ test("the context ring opens the flat provider/model list", async ({ page }) => 
     .locator(".composer-model-menu__provider-group")
     .filter({ hasText: "Kimi Core" });
   await expect(kimiGroup.locator(".composer-model-menu__vision").first()).toBeVisible();
-  await expect(kimiGroup.locator(".composer-model-menu__thinking-badge").first()).toContainText(
-    "思考 低",
-  );
   await expect(
     page.locator(".composer-model-menu__group-name").filter({ hasText: "GLM Workspace" }),
   ).toBeVisible();

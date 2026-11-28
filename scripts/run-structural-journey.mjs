@@ -324,9 +324,22 @@ try {
     });
   }
 
-  const browserPair = await request('POST', '/browser/auto-pair', {}, {
-    Origin: 'chrome-extension://structuraljourney',
+  // Pair the way the bridge requires since the 2026-11-27 hardening: the host issues a
+  // single-use code and the extension redeems it. An extension origin that has not
+  // redeemed a code cannot auto-pair (that request answers 403); redeeming promotes the
+  // origin, so reconnects from it need no code afterwards.
+  const pairCode = `trbp-${'0123456789abcdef'.repeat(2)}`;
+  const pairCodeIssued = await request('POST', '/browser/pair-code', {
+    code: pairCode,
+    expires_in: 600,
+    session_id: sessionA,
+    workspace_id: 'journey-structural-a',
   });
+  const browserPair = pairCodeIssued.status === 200
+    ? await request('POST', '/browser/pair', { code: pairCode }, {
+      Origin: 'chrome-extension://structuraljourney',
+    })
+    : pairCodeIssued;
   const browserToken = browserPair.json?.credential ?? '';
   record(browserPair.status === 200 && browserToken ? '09-browser-pair' : '09-browser-pair', browserPair.status === 200 && browserToken ? 'PASS' : 'FAIL', {
     status: browserPair.status,
@@ -509,4 +522,7 @@ try {
   };
   fs.writeFileSync(path.join(outDir, 'summary.json'), JSON.stringify(summary, null, 2) + '\n');
   console.log(`[structural] ${steps.filter((step) => step.status === 'PASS').length} PASS, ${summary.blocked.length} BLOCKED, ${summary.failed.length} FAIL -> ${outDir}`);
+  // A FAIL must fail the gate. BLOCKED steps are environment gates (no real provider
+  // key, no Remote-SSH window) and are reported without failing the run.
+  if (summary.failed.length > 0) process.exitCode = 1;
 }
