@@ -22,12 +22,24 @@ _LATIN1_MOJIBAKE_PATTERN = re.compile(
     r"\u00E2\u00E3\u00E4\u00E5\u00E6\u00E7\u00E8\u00E9\u00EF\u00F0]"
     r"[\u0080-\u00BF]{1,2}){2,}"
 )
-_THINK_BLOCK_PATTERN = re.compile(r"<think\b[^>]*>.*?</think\s*>", re.IGNORECASE | re.DOTALL)
+#: ``<think>…</think>`` and MiniMax's spelling ``<mm:think>…</mm:think>`` are the same thing.
+_THINK_TAG_NAME = r"(?:mm:)?think"
+_THINK_BLOCK_PATTERN = re.compile(
+    rf"<{_THINK_TAG_NAME}\b[^>]*>.*?</{_THINK_TAG_NAME}\s*>", re.IGNORECASE | re.DOTALL
+)
 # A stream cut mid-reasoning leaves the opening tag without its closing tag.
 # Dropping only the tag would publish the raw chain-of-thought as coaching
 # text, so an unclosed block consumes everything to the end of the reply.
-_OPEN_THINK_BLOCK_PATTERN = re.compile(r"<think\b[^>]*>.*\Z", re.IGNORECASE | re.DOTALL)
-_THINK_TAG_PATTERN = re.compile(r"</?think\b[^>]*>", re.IGNORECASE | re.DOTALL)
+_OPEN_THINK_BLOCK_PATTERN = re.compile(
+    rf"<{_THINK_TAG_NAME}\b[^>]*>.*\Z", re.IGNORECASE | re.DOTALL
+)
+_THINK_TAG_PATTERN = re.compile(rf"</?{_THINK_TAG_NAME}\b[^>]*>", re.IGNORECASE | re.DOTALL)
+_THINK_OPEN_TAG_PATTERN = re.compile(rf"<{_THINK_TAG_NAME}\b[^>]*>", re.IGNORECASE | re.DOTALL)
+_THINK_CLOSE_TAG_PATTERN = re.compile(rf"</{_THINK_TAG_NAME}\b[^>]*>", re.IGNORECASE | re.DOTALL)
+# Provider-internal protocol that must never reach the learner. MiniMax models put
+# ``]<]minimax[>[`` in front of special tokens; when they try to call a tool on a request that
+# carries none, the attempt arrives as content (seen with a real model on 2026-11-28:
+# ``]<]minimax[>[<tool_call><mm:think>Let me read payments.py…</mm:think>]<]minimax[>[…``).
 _PROVIDER_CONTROL_MARKER_PATTERN = re.compile(
     r"\]\s*<\]\s*minimax\s*\[>\s*\[", re.IGNORECASE | re.DOTALL,
 )
@@ -35,6 +47,26 @@ _PSEUDO_TOOL_CALL_BLOCK_PATTERN = re.compile(
     r"<tool_call\b[^>]*>.*?(?:</tool_call\s*>|$)", re.IGNORECASE | re.DOTALL,
 )
 _PSEUDO_TOOL_CALL_TAG_PATTERN = re.compile(r"</?tool_call\b[^>]*>", re.IGNORECASE | re.DOTALL)
+_PSEUDO_TOOL_CALL_OPEN_PATTERN = re.compile(r"<tool_call\b[^>]*>", re.IGNORECASE | re.DOTALL)
+_PSEUDO_TOOL_CALL_CLOSE_PATTERN = re.compile(r"</tool_call\s*>", re.IGNORECASE | re.DOTALL)
+#: A gateway puts this sentence where a model message has no content of its own — a step that only
+#: calls a tool. It is protocol, not text. Left alone it entered the history, and the next turn the
+#: model echoed it as the last line of a reply (seen with a real model on 2026-11-28).
+PROVIDER_EMPTY_CONTENT_SENTINEL = "[System: Empty message content sanitised to satisfy protocol]"
+_PROVIDER_SENTINEL_PATTERN = re.compile(re.escape(PROVIDER_EMPTY_CONTENT_SENTINEL), re.IGNORECASE)
+#: Canonical spellings whose beginning may be split across two stream chunks.
+_PROTOCOL_TOKEN_PREFIXES = (
+    "<think",
+    "</think",
+    "<mm:think",
+    "</mm:think",
+    "]<]minimax[>[",
+    "<tool_call",
+    "</tool_call",
+    PROVIDER_EMPTY_CONTENT_SENTINEL,
+)
+_THINK_CLOSE_TAIL = len("</mm:think>") - 1
+_TOOL_CALL_CLOSE_TAIL = len("</tool_call>") - 1
 _VISIBLE_MODEL_PUNCTUATION_MAP = str.maketrans({"…": "...", "\u2013": "-", "\u2014": "-"})
 
 _CYRILLIC_CHAR_PATTERN = re.compile(r"[\u0400-\u04FF]")
@@ -85,7 +117,8 @@ def _strip_provider_control_markers(text: str) -> str:
 def _strip_reasoning_blocks(text: str) -> str:
     if not text:
         return ""
-    cleaned = _THINK_BLOCK_PATTERN.sub("", text)
+    cleaned = _PROVIDER_SENTINEL_PATTERN.sub("", text)
+    cleaned = _THINK_BLOCK_PATTERN.sub("", cleaned)
     cleaned = _OPEN_THINK_BLOCK_PATTERN.sub("", cleaned)
     cleaned = _THINK_TAG_PATTERN.sub("", cleaned)
     return _strip_provider_control_markers(cleaned)
@@ -114,9 +147,6 @@ def _normalize_script_token(token: str) -> str:
 
 
 _VISIBLE_TOKEN_PATTERN = re.compile(r"\S+")
-
-
-_THINK_CLOSE_TAG_PATTERN = re.compile(r"</think\b[^>]*>", re.IGNORECASE | re.DOTALL)
 
 
 _QUESTION_RUN_PATTERN = re.compile(r"\?{4,}")
@@ -513,29 +543,35 @@ def _is_think_tag_prefix(text: str) -> bool:
     if not text.startswith("<"):
         return False
     lowered = text.lower()
-    if lowered.startswith("</think"):
-        remainder = text[7:]
-        if not remainder:
-            return True
-        first = remainder[0]
-        return not (first.isalnum() or first == "_")
-    if lowered.startswith("<think"):
-        remainder = text[6:]
-        if not remainder:
-            return True
-        first = remainder[0]
-        return not (first.isalnum() or first == "_")
-    if "</think".startswith(lowered) or "<think".startswith(lowered):
+    if _THINK_TAG_PATTERN.fullmatch(lowered):
         return True
-    return False
+    # A fragment of a tag whose rest has not arrived yet ("<thi", "</mm:th").
+    return any(tag.startswith(lowered) for tag in _PROTOCOL_TOKEN_PREFIXES if tag.startswith("<"))
+
+
+def _protocol_prefix_start(text: str) -> int | None:
+    """Start of a trailing fragment that may be the beginning of a tag or provider marker.
+
+    A tag or marker can be split across two stream chunks. Whatever might still turn into one
+    stays in the buffer; everything before it is released.
+    """
+    lowered = text.lower()
+    best: int | None = None
+    for token in _PROTOCOL_TOKEN_PREFIXES:
+        for length in range(len(token), 0, -1):
+            if lowered.endswith(token[:length].lower()):
+                start = len(text) - length
+                if best is None or start < best:
+                    best = start
+                break
+    return best
 
 
 def _reasoning_prefix_start(text: str) -> int | None:
     last_lt = text.rfind("<")
     if last_lt < 0:
         return None
-    suffix = text[last_lt:]
-    if _is_think_tag_prefix(suffix):
+    if _is_think_tag_prefix(text[last_lt:]):
         return last_lt
     return None
 
@@ -552,56 +588,87 @@ def _prefers_chinese(response_language: str | None) -> bool:
 
 
 class ReasoningBlockFilter:
+    """Keeps reasoning and provider protocol out of the visible stream.
+
+    Hidden: ``<think>`` / ``<mm:think>`` blocks, the MiniMax control marker ``]<]minimax[>[``,
+    and ``<tool_call>`` blocks — a model that tries to call a tool on a request that carries none
+    sends the attempt as content. Text before a hidden construct is released at once; a construct
+    split across chunks is held until its rest arrives.
+    """
+
     def __init__(self) -> None:
         self._buffer = ""
         self._inside_think = False
+        self._inside_tool_call = False
 
     def push(self, chunk: str) -> str:
         self._buffer += chunk
+        return self._drain(final=False)
+
+    def flush(self) -> str:
+        buffered = self._drain(final=True)
+        self._buffer = ""
+        return buffered
+
+    @staticmethod
+    def _tail(text: str, length: int) -> str:
+        return text[-length:] if len(text) > length else text
+
+    def _drain(self, *, final: bool) -> str:
         emitted: list[str] = []
 
         while self._buffer:
+            if self._inside_tool_call:
+                close_match = _PSEUDO_TOOL_CALL_CLOSE_PATTERN.search(self._buffer)
+                if close_match:
+                    self._buffer = self._buffer[close_match.end() :]
+                    self._inside_tool_call = False
+                    continue
+                # Still inside the block: keep only what could be the start of its closing tag.
+                self._buffer = "" if final else self._tail(self._buffer, _TOOL_CALL_CLOSE_TAIL)
+                break
+
             if self._inside_think:
                 close_match = _THINK_CLOSE_TAG_PATTERN.search(self._buffer)
                 if close_match:
                     self._buffer = self._buffer[close_match.end() :]
                     self._inside_think = False
                     continue
-
-                tail_length = len("</think>") - 1
-                if len(self._buffer) > tail_length:
-                    self._buffer = self._buffer[-tail_length:]
+                self._buffer = "" if final else self._tail(self._buffer, _THINK_CLOSE_TAIL)
                 break
 
-            open_match = _THINK_BLOCK_PATTERN.search(self._buffer)
-            if open_match:
-                emitted.append(self._buffer[: open_match.start()])
-                self._buffer = self._buffer[open_match.end() :]
+            found: list[tuple[int, str, re.Match[str]]] = []
+            for kind, pattern in (
+                ("block", _THINK_BLOCK_PATTERN),
+                ("open", _THINK_OPEN_TAG_PATTERN),
+                ("close", _THINK_CLOSE_TAG_PATTERN),
+                ("marker", _PROVIDER_CONTROL_MARKER_PATTERN),
+                ("sentinel", _PROVIDER_SENTINEL_PATTERN),
+                ("tool", _PSEUDO_TOOL_CALL_OPEN_PATTERN),
+                ("tool_close", _PSEUDO_TOOL_CALL_CLOSE_PATTERN),
+            ):
+                match = pattern.search(self._buffer)
+                if match:
+                    found.append((match.start(), kind, match))
+            if found:
+                start, kind, match = min(found, key=lambda item: item[0])
+                emitted.append(self._buffer[:start])
+                self._buffer = self._buffer[match.end() :]
+                if kind == "open":
+                    self._inside_think = True
+                elif kind == "tool":
+                    self._inside_tool_call = True
                 continue
 
-            start_match = re.search(r"<think\b[^>]*>", self._buffer, re.IGNORECASE | re.DOTALL)
-            if start_match:
-                emitted.append(self._buffer[: start_match.start()])
-                self._buffer = self._buffer[start_match.end() :]
-                self._inside_think = True
-                continue
-
-            prefix_start = _reasoning_prefix_start(self._buffer)
-            if prefix_start is None:
+            # Nothing hidden in the buffer: release it, but hold a trailing fragment that may
+            # still become a tag or marker. At the end of the stream a fragment is just text.
+            hold = None if final else _protocol_prefix_start(self._buffer)
+            if hold is None:
                 emitted.append(self._buffer)
                 self._buffer = ""
-            elif prefix_start > 0:
-                emitted.append(self._buffer[:prefix_start])
-                self._buffer = self._buffer[prefix_start:]
+            elif hold > 0:
+                emitted.append(self._buffer[:hold])
+                self._buffer = self._buffer[hold:]
             break
 
         return "".join(emitted)
-
-    def flush(self) -> str:
-        if self._inside_think:
-            self._buffer = ""
-            self._inside_think = False
-            return ""
-        buffered = _trim_trailing_reasoning_prefix(self._buffer)
-        self._buffer = ""
-        return _strip_reasoning_blocks(buffered)
