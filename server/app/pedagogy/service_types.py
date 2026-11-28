@@ -11,6 +11,11 @@ from .project_adaptation_coach import ProjectAdaptationGuide
 from .project_idea_miner import ProjectIdea
 from .project_source_scout import ProjectSourceSuggestion
 
+#: Stand-in focus used when a learner has no focus, memory, weakness or long-term goal yet.
+#: It is an internal anchor, never a subject: nothing shown to the learner or fed to the
+#: model as a goal may name it.
+GENERIC_FOCUS_LABEL = "current task"
+
 TeachingMode = Literal[
     "onboarding",
     "idea_implementation",

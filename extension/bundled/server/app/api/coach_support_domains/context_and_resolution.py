@@ -1306,14 +1306,16 @@ def resolve_coach_turn(deps: CoachSupportDeps,
     )
     if productivity.should_converge:
         coach_context["productivity_convergence"] = productivity.to_payload()
-    if context_tier != "minimal":
-        raw_cf = request.current_file
-        raw_diagnostics = (
-            raw_cf.get("diagnostics")
-            if isinstance(raw_cf, dict)
-            else getattr(raw_cf, "diagnostics", None)
-        )
-        live_diagnostics = list(raw_diagnostics or []) if raw_cf is not None else []
+    # The Weakness Recall Cue (contract §7) is a few hundred characters and is computed in
+    # every context tier. The minimal tier is a prompt and IO reduction for short questions,
+    # never a behavior gate: a learner with a live error in the editor who types "and now?"
+    # is exactly the case the cue exists for, and the tier resolver reads only the message.
+    raw_cf = request.current_file
+    raw_diagnostics = (
+        raw_cf.get("diagnostics") if isinstance(raw_cf, dict) else getattr(raw_cf, "diagnostics", None)
+    )
+    live_diagnostics = list(raw_diagnostics or []) if raw_cf is not None else []
+    if live_diagnostics:
         recorded_weaknesses: list[Any] = (
             deps.runtime.memory_service.weakness_records(state.workspace_id)
             or list(getattr(memory, "weaknesses", None) or [])

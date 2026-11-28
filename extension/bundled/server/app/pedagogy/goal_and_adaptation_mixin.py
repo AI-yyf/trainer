@@ -16,6 +16,7 @@ from .principle_explainer import PrincipleNote
 from .project_adaptation_coach import ProjectAdaptationGuide
 from .project_idea_miner import ProjectIdea
 from .service_types import (
+    GENERIC_FOCUS_LABEL,
     AdaptiveCoachingBias,
     ImplementationGuide,
     LearnerState,
@@ -232,7 +233,7 @@ class GoalAndAdaptationMixin:
         ):
             if candidate:
                 return candidate
-        return "current task"
+        return GENERIC_FOCUS_LABEL
 
     def _estimate_attempt_count(
         self,

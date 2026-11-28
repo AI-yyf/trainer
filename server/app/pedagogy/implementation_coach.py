@@ -20,11 +20,17 @@ class ImplementationCoachService:
         memory_snapshot: MemorySnapshot | None = None,
     ) -> ImplementationGuide:
         from .service import ImplementationGuide
+        from .service_types import GENERIC_FOCUS_LABEL
 
         current_file = request.current_file
+        # The generic focus is an internal anchor for a learner who has no focus yet, not
+        # the subject of the turn. Kept, every guide for a new learner says
+        # "先把 current task 压成一个可验证的行为变化". Empty lets each helper speak about
+        # what the learner actually asked for.
+        focus_area = "" if decision.focus_area.strip() == GENERIC_FOCUS_LABEL else decision.focus_area
         idea_summary = self._summarize_idea(
             request.message,
-            decision.focus_area,
+            focus_area,
             profile,
             current_file,
             memory_snapshot,
@@ -33,11 +39,11 @@ class ImplementationCoachService:
             request.message,
             current_file,
             memory_snapshot,
-            decision.focus_area,
+            focus_area,
         )
         mvp_definition = self._mvp_definition(
             request.message,
-            decision.focus_area,
+            focus_area,
             current_file,
             memory_snapshot,
         )
@@ -45,22 +51,22 @@ class ImplementationCoachService:
             request.message,
             current_file,
             learner_state,
-            decision.focus_area,
+            focus_area,
             memory_snapshot,
         )
         next_steps = self._next_steps(
             request.message,
             current_file,
             memory_snapshot,
-            decision.focus_area,
+            focus_area,
         )
         validation_strategy = self._validation_strategy(current_file, memory_snapshot)
         open_questions = self._open_questions(request, current_file, memory_snapshot)
         entry_points = self._entry_points(current_file, memory_snapshot)
         risk_notes = self._risk_notes(request.message, current_file, learner_state, memory_snapshot)
-        teaching_goal = self._teaching_goal(decision.focus_area, memory_snapshot)
-        success_signal = self._success_signal(current_file, request.message, decision.focus_area, memory_snapshot)
-        fallback_step = self._fallback_step(current_file, request.message, decision.focus_area, memory_snapshot)
+        teaching_goal = self._teaching_goal(focus_area, memory_snapshot)
+        success_signal = self._success_signal(current_file, request.message, focus_area, memory_snapshot)
+        fallback_step = self._fallback_step(current_file, request.message, focus_area, memory_snapshot)
 
         return ImplementationGuide(
             idea_summary=idea_summary,
