@@ -23,6 +23,7 @@ LIBRARY_DIRNAME = "Trainer Library"
 ORIGINALS_DIRNAME = "originals"
 MARKDOWN_DIRNAME = "markdown"
 ASSETS_DIRNAME = "assets"
+MANAGED_CANONICAL_DIRNAME = "canonical-resources"
 
 
 @dataclass(slots=True)
@@ -43,6 +44,19 @@ def library_root(workspace_root: Path) -> Path:
 
 def canonical_root(workspace_root: Path) -> Path:
     return library_root(workspace_root) / CANONICAL_DIRNAME
+
+
+def managed_workspace_root(data_root: Path, workspace_id: str) -> Path:
+    """Trainer-owned root for canonical Markdown when no library root is bound.
+
+    On a cold start the workspace folder is the learner's code project, so the
+    canonical copy cannot go there. It lives under the sidecar data root, next to
+    the inline uploads and the search index of the same workspace, and moves with
+    them when a learning folder is bound later. The layout below this root is the
+    same as below a bound library root, so a recorded relative path resolves as-is.
+    """
+    slug = "".join(ch if ch.isalnum() else "-" for ch in str(workspace_id or "").lower()).strip("-")
+    return Path(data_root) / MANAGED_CANONICAL_DIRNAME / (slug or "workspace")
 
 
 def markdown_path_for(workspace_root: Path, resource_id: str) -> Path:

@@ -1043,19 +1043,28 @@ class ResourceService(
         resource: ApiResourceRecord,
         group: str,
     ) -> tuple[str, str | None]:
-        """Move an owned snapshot into (or out of) a user-named group directory.
+        """Put an owned snapshot into (or out of) a user-named group directory.
 
         Only Trainer's own managed snapshots move: the file lives under the
         workspace's inline-resource root, the project-side sandbox mirror (if
         any) keeps pointing at the same bytes, and imported folder collections
         keep their structure. Returns the new local file path and the proven
         collection root (None when the resource returns to the ungrouped root).
+
+        A resource that already has its canonical document has no snapshot to
+        move: the library replaced the upload with that document. Its group is
+        metadata only — the same ``collection_path`` the folder tree reads.
         """
 
         source_path = self._local_source_path(resource.source)
-        if source_path is None or not source_path.is_file():
-            raise ValueError("Only local library snapshots can be grouped.")
         inline_root = self._inline_resource_root(workspace_id).resolve(strict=False)
+        if source_path is None or not source_path.is_file():
+            if self._has_readable_markdown(self._canonical_markdown_path(workspace_id, resource)):
+                segments = self._normalize_group_segments(group)
+                if not segments:
+                    return str(resource.source), None
+                return str(resource.source), str(inline_root.joinpath("groups", *segments))
+            raise ValueError("Only local library snapshots can be grouped.")
         resolved_source = source_path.resolve(strict=False)
         try:
             relative = resolved_source.relative_to(inline_root)

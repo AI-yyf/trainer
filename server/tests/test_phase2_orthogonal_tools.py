@@ -18,6 +18,8 @@ from app.llm.resource_message_parts import build_resource_display_parts
 from app.llm.tool_primitives import (
     ORTHOGONAL_PRIMITIVE_NAMES,
     _build_library_exec_env,
+    _linux_bwrap_bin,
+    _macos_sandbox_exec_usable,
     _validate_library_exec_command,
     select_orthogonal_tools_for_turn,
 )
@@ -883,7 +885,9 @@ async def test_library_exec_seatbelt_denies_network_and_host_secrets_and_fails_c
         )
 
     # Live runtime execution: outbound TCP socket and host secret reads are blocked,
-    # while in-<LibraryRoot> Python work succeeds cleanly.
+    # while in-<LibraryRoot> Python work succeeds cleanly where a kernel sandbox exists.
+    # Without one (Windows, Linux without bwrap) an interpreter is refused outright.
+    in_library_python_is_sandboxed = bool(_macos_sandbox_exec_usable()) or bool(_linux_bwrap_bin())
     net_res = await registry.invoke(
         ctx,
         "library_exec",
@@ -896,8 +900,12 @@ async def test_library_exec_seatbelt_denies_network_and_host_secrets_and_fails_c
     )
     assert net_res["ok"] is False
 
-    # Attempt to read host secret via indirect path construction (bypassing static token check)
-    # is caught at runtime by Seatbelt / PEP 578 audit hook.
+    # The caller's environment does not reach the child: the exec environment is
+    # allow-listed, so a secret location passed via $ENV never arrives and the child
+    # stops on the missing variable. That is what this probe proves. The sandbox's own
+    # denial of a secret path built inside the child is covered, non-vacuously, by
+    # test_restored_project_read_only.py::
+    # test_library_exec_runtime_guard_blocks_reads_of_host_files_outside_all_roots.
     monkeypatch.setenv("TEST_SECRET_DIR", str(ssh_dir.resolve()))
     secret_res = await registry.invoke(
         ctx,
@@ -912,6 +920,10 @@ async def test_library_exec_seatbelt_denies_network_and_host_secrets_and_fails_c
     )
     assert secret_res["ok"] is False
     assert "PRIVATE_KEY_PAYLOAD" not in secret_res.get("stdout", "")
+    captured_output = secret_res.get("stdout", "") + secret_res.get("stderr", "")
+    assert str(ssh_dir.resolve()) not in captured_output
+    if in_library_python_is_sandboxed:
+        assert "TEST_SECRET_DIR" in secret_res.get("stderr", ""), secret_res
 
     ok_res = await registry.invoke(
         ctx,
@@ -924,9 +936,14 @@ async def test_library_exec_seatbelt_denies_network_and_host_secrets_and_fails_c
             )
         },
     )
-    assert ok_res["ok"] is True
-    assert "seatbelt_clean" in ok_res["stdout"]
-    assert (library_root / "seatbelt_ok.md").is_file()
+    if in_library_python_is_sandboxed:
+        assert ok_res["ok"] is True, ok_res
+        assert "seatbelt_clean" in ok_res["stdout"]
+        assert (library_root / "seatbelt_ok.md").is_file()
+    else:
+        assert ok_res["ok"] is False, ok_res
+        assert ok_res["error"] == "sandbox_unavailable"
+        assert not (library_root / "seatbelt_ok.md").exists()
 
     # Verify macOS Seatbelt argv generation when kernel sandbox is usable.
     monkeypatch.setattr("app.llm.tool_primitives._macos_sandbox_exec_usable", lambda: True)

@@ -13,14 +13,17 @@ from __future__ import annotations
 LIBRARY_COPY: dict[str, dict[str, str]] = {
     # ------------------------------------------------------------------ root
     "library_root_unavailable": {
-        "zh-CN": "Trainer 资料库需要一个本地项目文件夹；当前工作区没有可用的本地根目录。",
-        "en-US": "Trainer Library needs an open local project folder; this workspace has no local root.",
-        "es-ES": "La Biblioteca de Trainer necesita una carpeta de proyecto local; este espacio de trabajo no tiene raiz local.",
-        "fr-FR": "La bibliotheque Trainer a besoin d'un dossier de projet local ; cet espace de travail n'a pas de racine locale.",
-        "de-DE": "Die Trainer-Bibliothek braucht einen lokalen Projektordner; dieser Arbeitsbereich hat kein lokales Stammverzeichnis.",
-        "ja-JP": "Trainer ライブラリにはローカルのプロジェクトフォルダーが必要です。このワークスペースにはローカルルートがありません。",
-        "ko-KR": "Trainer 라이브러리에는 로컬 프로젝트 폴더가 필요합니다. 이 워크스페이스에는 로컬 루트가 없습니다.",
-        "pt-BR": "A Biblioteca do Trainer precisa de uma pasta de projeto local; este espaco de trabalho nao tem raiz local.",
+        # Reached in two situations: a remote workspace without a local library root, and
+        # a local workspace whose learner has not chosen a learning folder yet (a cold
+        # start). The library root is never the code project, so the remedy is the same.
+        "zh-CN": "当前工作区还没有选择 Trainer 学习文件夹（资料库根目录）。请先在设置里选择学习文件夹，再保存笔记或资料。",
+        "en-US": "No Trainer learning folder (the library root) is chosen for this workspace yet. Choose one in Settings before saving notes or materials.",
+        "es-ES": "Este espacio de trabajo todavia no tiene una carpeta de aprendizaje de Trainer (la raiz de la biblioteca). Elige una en Ajustes antes de guardar notas o materiales.",
+        "fr-FR": "Aucun dossier d'apprentissage Trainer (la racine de la bibliotheque) n'est encore choisi pour cet espace de travail. Choisissez-en un dans les Parametres avant d'enregistrer des notes ou des documents.",
+        "de-DE": "Fuer diesen Arbeitsbereich ist noch kein Trainer-Lernordner (der Bibliothek-Stammordner) gewaehlt. Waehle einen in den Einstellungen, bevor du Notizen oder Materialien speicherst.",
+        "ja-JP": "このワークスペースにはまだ Trainer の学習フォルダー（ライブラリのルート）が選ばれていません。ノートや資料を保存する前に、設定で学習フォルダーを選んでください。",
+        "ko-KR": "이 워크스페이스에는 아직 Trainer 학습 폴더(라이브러리 루트)가 선택되지 않았습니다. 노트나 자료를 저장하기 전에 설정에서 학습 폴더를 선택하세요.",
+        "pt-BR": "Este espaco de trabalho ainda nao tem uma pasta de aprendizado do Trainer (a raiz da biblioteca). Escolha uma nas Configuracoes antes de salvar notas ou materiais.",
     },
     "library_not_writable": {
         "zh-CN": "当前工作区未受信任（或为远程工作区），不能写入 Trainer 资料库。",

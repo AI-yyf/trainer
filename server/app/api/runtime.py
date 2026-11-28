@@ -2286,8 +2286,11 @@ class TrainerRuntime:
         1. Adopted project's registered ``provisioning.root_path`` (local dir).
         2. Runtime data dir parent when ``TRAINER_DATA_DIR`` sits at
            ``<LibraryRoot>/.trainer/runtime``.
-        3. Unprovisioned standalone local workspace path fallback (for direct
-           tests/sessions without an adopted project root).
+
+        There is deliberately no fallback to the workspace folder. Before a library
+        root is bound that folder is the learner's code project, and treating it as
+        the library let one write create ``Trainer Library/`` inside their repository
+        (contract §4: the code project stays untouched; the learner binds a root).
         """
         resolved_workspace_id = (
             (self.repository.resolve_context_id(workspace_id) or workspace_id)
@@ -2306,13 +2309,6 @@ class TrainerRuntime:
             candidate = data_dir.parent.parent
             if candidate.is_dir():
                 return candidate
-
-        if resolved_workspace_id:
-            fallback = self._local_filesystem_root(
-                self.resolve_workspace_path(resolved_workspace_id)
-            )
-            if fallback:
-                return Path(fallback)
         return None
 
     def library_carrier_authority(self, workspace_id: str | None) -> WorkspaceAuthority | None:

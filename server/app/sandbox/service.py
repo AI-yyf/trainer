@@ -23,6 +23,7 @@ from ..core.models import (
     WorkspaceAuthoritySummary,
 )
 from ..resources.canonical import strip_front_matter
+from ..resources.canonical_store import managed_workspace_root
 from ..resources.preview import (
     PreviewService,
     _convert_archive_to_markdown,
@@ -120,8 +121,14 @@ class SandboxService(
         library_root = self._resolved_library_root(workspace_id)
         if library_root is not None:
             candidates.append(library_root / path)
+        # Same lookup order as the resource service: a cold start keeps the canonical
+        # copy under the data root, and older records may still point into the
+        # workspace folder (read only).
+        managed_root = managed_workspace_root(self.data_root, workspace_id)
+        if managed_root != library_root:
+            candidates.append(managed_root / path)
         workspace_root = self._resolved_workspace_path(workspace_id)
-        if workspace_root is not None and workspace_root != library_root:
+        if workspace_root is not None and workspace_root not in {library_root, managed_root}:
             candidates.append(workspace_root / path)
         for candidate in candidates:
             if self._path_is_file(candidate):

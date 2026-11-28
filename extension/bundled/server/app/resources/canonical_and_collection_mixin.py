@@ -22,7 +22,7 @@ from .canonical import (
     canonicalizable,
     plain_text_preview,
 )
-from .canonical_store import write_canonical_artifact
+from .canonical_store import managed_workspace_root, write_canonical_artifact
 from .models import (
     IndexStatus,
     ResourceChunk,
@@ -515,12 +515,13 @@ class CanonicalAndCollectionMixin:
             results.append(item)
         return results
 
-    def _canonical_writable_root(self, workspace_id: str) -> Path | None:
-        """Return the local library root (or standalone workspace root) when writable.
+    def _canonical_writable_root(self, workspace_id: str) -> Path:
+        """The root that owns this workspace's canonical Markdown and assets.
 
-        Prefers the Trainer Library Root resolved via ``_library_root_resolver``
-        so canonical Markdown and assets never pollute the user's code repo.
-        Remote SSH paths without a local library root stay non-writable.
+        A bound ``<LibraryRoot>`` when there is one. Before a learning folder is bound
+        (a cold start) the workspace folder is the learner's code project, so the copy
+        goes under the sidecar data root instead, next to the inline uploads and the
+        search index of the same workspace; see ``managed_workspace_root``.
         """
         library_root = self._resolved_library_root(workspace_id)
         if library_root is not None:
@@ -529,16 +530,7 @@ class CanonicalAndCollectionMixin:
                     return library_root
             except OSError:
                 pass
-
-        resolved = self._resolved_workspace_path(workspace_id)
-        if resolved is None:
-            return None
-        try:
-            if resolved.exists() and resolved.is_dir():
-                return resolved
-        except OSError:
-            return None
-        return None
+        return managed_workspace_root(self.data_root, workspace_id)
 
     def _normalized_resource_ids(self, resource_ids: list[str]) -> list[str]:
         normalized: list[str] = []
@@ -1256,7 +1248,12 @@ class CanonicalAndCollectionMixin:
         workspace_id: str,
         canonical_markdown_path: str | None,
     ) -> Path | None:
-        """Resolve a canonical Markdown file under ``<LibraryRoot>`` first, then legacy project fallback."""
+        """Resolve a canonical Markdown file: bound root, Trainer's data root, then legacy.
+
+        The workspace folder is the last candidate and is only ever read: cold starts
+        before the data-root fallback wrote the copy there, and those records must keep
+        opening. Nothing new is written under it.
+        """
         markdown = str(canonical_markdown_path or "").strip()
         if not markdown:
             return None
@@ -1267,8 +1264,11 @@ class CanonicalAndCollectionMixin:
         library_root = self._resolved_library_root(workspace_id)
         if library_root is not None:
             candidates.append(library_root / path)
+        managed_root = managed_workspace_root(self.data_root, workspace_id)
+        if managed_root != library_root:
+            candidates.append(managed_root / path)
         workspace_root = self._resolved_workspace_path(workspace_id)
-        if workspace_root is not None and workspace_root != library_root:
+        if workspace_root is not None and workspace_root not in {library_root, managed_root}:
             candidates.append(workspace_root / path)
         for candidate in candidates:
             try:

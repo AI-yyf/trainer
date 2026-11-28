@@ -31,7 +31,6 @@ import os
 import re
 import shlex
 import shutil
-import signal
 import subprocess
 import sys
 import tempfile
@@ -45,6 +44,29 @@ from ..core.models import (
     SandboxRenameRequest,
     SandboxRestoreRequest,
     SandboxWriteRequest,
+)
+from .library_exec_process import (
+    EXEC_OVERFLOW_FACTOR as _EXEC_OVERFLOW_FACTOR,
+)
+from .library_exec_process import (
+    SEATBELT_BRIDGING_HELPERS as _SEATBELT_BRIDGING_HELPERS,
+)
+from .library_exec_process import (
+    abandon_process_group as _abandon_process_group,
+)
+from .library_exec_process import (
+    collect_process_output as _collect_process_output,
+)
+from .library_exec_process import (
+    sbpl_deny_process_exec as _sbpl_deny_process_exec,
+)
+from .library_exec_process import (
+    terminate_process_group as _terminate_process_group,
+)
+from .tool_handlers.organization_and_sandbox import (
+    _INDEXABLE_LIBRARY_EXTENSIONS,
+    _auto_index_library_path,
+    _path_after_index,
 )
 from .tools import (
     ToolContext,
@@ -94,8 +116,6 @@ from .tools import (
     _handle_verify_practice_current_file,
     _handle_web_search,
     _handle_write_sandbox_file,
-    _match_resource_by_sandbox_path,
-    _reindex_matching_sandbox_resource,
     _safe_sandbox_relative_path,
     _sandbox_service,
     _string,
@@ -116,31 +136,6 @@ ORTHOGONAL_PRIMITIVE_NAMES: tuple[str, ...] = (
 )
 
 ORTHOGONAL_PRIMITIVE_SET: frozenset[str] = frozenset(ORTHOGONAL_PRIMITIVE_NAMES)
-
-_INDEXABLE_LIBRARY_EXTENSIONS: frozenset[str] = frozenset(
-    {
-        ".md",
-        ".markdown",
-        ".txt",
-        ".rst",
-        ".json",
-        ".yaml",
-        ".yml",
-        ".toml",
-        ".csv",
-        ".py",
-        ".ts",
-        ".tsx",
-        ".js",
-        ".jsx",
-        ".html",
-        ".htm",
-        ".tex",
-        ".pdf",
-        ".epub",
-        ".docx",
-    }
-)
 
 # Guardrails for library_exec: forbid irreversible deletes, privilege escalation,
 # symlinks, tilde/env home escapes, pipe-to-shell, and path traversal outside <LibraryRoot>.
@@ -178,6 +173,16 @@ _LIBRARY_EXEC_FORBIDDEN_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
         re.compile(r"(?:^|[;&|\n`$(]\s*)ln\s+|\bos\.symlink\s*\(", re.IGNORECASE),
         "Creating symlinks is forbidden in library_exec to prevent sandbox path escapes.",
+    ),
+    (
+        # Path-shaped references only: a dotted store name anywhere, or an undotted
+        # "trash/" segment. A learner's print('trash') must stay untouched.
+        re.compile(
+            r"\.(?:trainer-)?trash(?:[/\\]|$|[\s'\"])|(?:^|[\s'\"=/\\(\[])trash/",
+            re.IGNORECASE,
+        ),
+        "Recoverable deletions in trash storage are read-only inside library_exec; "
+        "use library_write(action='restore').",
     ),
     (
         re.compile(r"\bsudo\b|\bsu\b|\bchmod\b|\bchown\b|\bmkfs\b|\bdd\s+if=", re.IGNORECASE),
@@ -309,6 +314,9 @@ _MAX_EXEC_TIMEOUT_SECONDS = 30.0
 _DEFAULT_EXEC_TIMEOUT_SECONDS = 15.0
 _MAX_EXEC_OUTPUT_BYTES = 30_000
 _MAX_RAW_CAPTURE_BYTES = 262_144
+# Recoverable-deletion stores. library_exec may read them but never write into
+# them: a forged or edited trash entry would turn "soft delete" into a lie.
+_TRASH_DIRNAMES = (".trash", "trash", ".trainer-trash")
 
 _MACOS_SANDBOX_USABLE: bool | None = None
 _LINUX_BWRAP_BIN: str | None | bool = False
@@ -385,6 +393,12 @@ def _check_write(target: Path, event: str) -> None:
         raise PermissionError(f"Sandbox blocked write to read-only <ProjectRoot>: {target}")
     if not _under(_LIB_ROOT, target):
         raise PermissionError(f"Sandbox blocked write outside <LibraryRoot>: {target}")
+    for trash_name in (".trash", "trash", ".trainer-trash"):
+        if _under(_LIB_ROOT / trash_name, target):
+            raise PermissionError(
+                f"Sandbox blocked {event} into recoverable storage {trash_name}/; "
+                "use library_write(action='restore')."
+            )
 
 def _audit(event: str, args: tuple) -> None:
     if event == "open":
@@ -449,61 +463,6 @@ def _audit(event: str, args: tuple) -> None:
 
 sys.addaudithook(_audit)
 '''
-
-
-# ---------------------------------------------------------------------------
-# Auto-indexing helpers for <LibraryRoot>
-# ---------------------------------------------------------------------------
-
-
-async def _auto_index_library_path(
-    context: ToolContext,
-    relative_path: str,
-    *,
-    tags: list[str] | None = None,
-) -> dict[str, Any]:
-    """Ensure a file inside <LibraryRoot> is indexed in SQLite FTS5 right after mutation."""
-    sandbox_service = _sandbox_service(context)
-    resource_service = (
-        getattr(context.runtime, "resource_service", None) if context.runtime is not None else None
-    )
-    if sandbox_service is None or resource_service is None:
-        return {"auto_indexed": False, "reason": "service_unavailable"}
-    try:
-        root = Path(sandbox_service.ensure_operation_root(context.workspace_id)).resolve()
-        candidate = (root / relative_path).resolve()
-        if not candidate.exists() or not candidate.is_file():
-            return {"auto_indexed": False, "reason": "not_a_file"}
-        if candidate.suffix.lower() not in _INDEXABLE_LIBRARY_EXTENSIONS:
-            return {"auto_indexed": False, "reason": "extension_skipped"}
-        existing = _match_resource_by_sandbox_path(
-            context.runtime, context.workspace_id, relative_path
-        )
-        if existing is not None:
-            reindexed = _reindex_matching_sandbox_resource(context, relative_path)
-            return {
-                "auto_indexed": True,
-                "mode": "reindexed",
-                "resource_id": getattr(existing, "id", None),
-                "library": reindexed,
-            }
-        indexed = await _handle_index_sandbox_file(
-            context,
-            {
-                "path": relative_path,
-                "name": Path(relative_path).name,
-                **({"tags": tags} if tags else {}),
-            },
-        )
-        return {
-            "auto_indexed": bool(indexed.get("ok")),
-            "mode": "indexed_new",
-            "resource_id": indexed.get("resource_id"),
-            "library": indexed,
-        }
-    except Exception as exc:  # noqa: BLE001 - best-effort auto-indexing never fails the write
-        logger.warning("library_auto_index_failed path=%s err=%s", relative_path, exc)
-        return {"auto_indexed": False, "reason": exc.__class__.__name__, "detail": str(exc)}
 
 
 def _is_within_root(root: Path, candidate: Path) -> bool:
@@ -879,14 +838,19 @@ async def _handle_library_write(context: ToolContext, args: dict[str, Any]) -> d
     if action == "write":
         result = await _handle_write_sandbox_file(context, args)
         if isinstance(result, dict) and result.get("ok") and result.get("path"):
+            requested_path = str(result["path"])
             index_info = await _auto_index_library_path(
                 context,
-                str(result["path"]),
+                requested_path,
                 tags=args.get("tags") if isinstance(args.get("tags"), list) else None,
             )
             result["auto_indexed"] = index_info.get("auto_indexed", False)
             if index_info.get("resource_id"):
                 result["resource_id"] = index_info["resource_id"]
+            existing_path = _path_after_index(index_info.get("path"), requested=requested_path)
+            if existing_path != requested_path:
+                result["requested_path"] = requested_path
+                result["path"] = existing_path
         return _stamp_library_result(result, action)
 
     if action == "edit":
@@ -1034,7 +998,7 @@ async def _handle_library_write(context: ToolContext, args: dict[str, Any]) -> d
             "domain": "library_sandbox",
             "action": action,
             "path": src_rel,
-            "new_path": dst_rel,
+            "new_path": _path_after_index(index_info.get("path"), requested=dst_rel),
             "auto_indexed": index_info.get("auto_indexed", False),
             **({"resource_id": index_info["resource_id"]} if index_info.get("resource_id") else {}),
         }
@@ -1104,7 +1068,7 @@ async def _handle_library_write(context: ToolContext, args: dict[str, Any]) -> d
             }
         restore_path = str(args.get("restore_path") or "").strip() or None
         try:
-            sandbox_service.restore(
+            restored_state = sandbox_service.restore(
                 context.workspace_id,
                 SandboxRestoreRequest(
                     workspace_id=context.workspace_id,
@@ -1116,15 +1080,22 @@ async def _handle_library_write(context: ToolContext, args: dict[str, Any]) -> d
         except Exception as exc:
             logger.debug("Suppressed exception in tool_primitives: %s", exc)
             return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
-        index_target = restore_path or raw_path
-        index_info = await _auto_index_library_path(context, index_target)
+        # The service reports where the file landed: the requested destination, or
+        # its original place when none was given. The trash path no longer exists,
+        # so it must not be handed back as the path to read, edit or delete next.
+        restored_rel = str(getattr(restored_state, "selected_path", "") or "").strip()
+        if not restored_rel:
+            restored_rel = restore_path or raw_path
+        index_info = await _auto_index_library_path(context, restored_rel)
         return {
             "ok": True,
             "domain": "library_sandbox",
             "action": "restore",
-            "path": raw_path,
-            "restored_path": restore_path,
+            "path": _path_after_index(index_info.get("path"), requested=restored_rel),
+            "trashed_path": raw_path,
+            "restored_path": restored_rel,
             "auto_indexed": index_info.get("auto_indexed", False),
+            **({"resource_id": index_info["resource_id"]} if index_info.get("resource_id") else {}),
         }
 
     if action == "import_url":
@@ -1215,27 +1186,27 @@ def _extract_candidate_absolute_paths(cleaned: str) -> tuple[list[str], str | No
     return candidates, None
 
 
+_EXEC_GUARD_DIR: Path | None = None
+
+
 def _ensure_python_audit_guard_dir(library_root: Path) -> Path:
-    tmp_dir = library_root / ".trainer-tmp"
-    tmp_dir.mkdir(parents=True, exist_ok=True)
-    uid_tag = str(os.getuid()) if hasattr(os, "getuid") else "user"
-    guard_dir = Path(tempfile.gettempdir()).resolve() / f"trainer-exec-guard-{uid_tag}"
-    guard_dir.mkdir(parents=True, exist_ok=True)
-    site_file = guard_dir / "sitecustomize.py"
-    needs_write = (
-        not site_file.exists()
-        or site_file.read_text(encoding="utf-8", errors="ignore") != _PYTHON_AUDIT_SITECUSTOMIZE
-    )
-    if needs_write:
-        with contextlib.suppress(OSError):
-            os.chmod(guard_dir, 0o700)
-        if site_file.exists():
-            with contextlib.suppress(OSError):
-                os.chmod(site_file, 0o600)
+    """Materialise the audit guard as the child's private ``sitecustomize.py``.
+
+    ``mkdtemp`` keeps the directory unpredictable and owner-only. A fixed name in a
+    shared temp dir let another local user pre-create it, so every library_exec child
+    of this user would import that user's module ahead of the guard.
+    """
+    global _EXEC_GUARD_DIR
+    (library_root / ".trainer-tmp").mkdir(parents=True, exist_ok=True)
+    guard_dir: Path | None = _EXEC_GUARD_DIR
+    if guard_dir is None or not (guard_dir / "sitecustomize.py").is_file():
+        guard_dir = Path(tempfile.mkdtemp(prefix="trainer-exec-guard-"))
+        site_file = guard_dir / "sitecustomize.py"
         site_file.write_text(_PYTHON_AUDIT_SITECUSTOMIZE, encoding="utf-8")
-    with contextlib.suppress(OSError):
-        os.chmod(site_file, 0o444)
-        os.chmod(guard_dir, 0o555)
+        with contextlib.suppress(OSError):
+            os.chmod(site_file, 0o444)
+            os.chmod(guard_dir, 0o555)
+        _EXEC_GUARD_DIR = guard_dir
     return guard_dir
 
 
@@ -1351,6 +1322,7 @@ def _build_macos_seatbelt_profile(library_root: Path, project_root: Path | None)
         "(allow default)",
         "(deny network*)",
         "(deny appleevent-send)",
+        _sbpl_deny_process_exec(_SEATBELT_BRIDGING_HELPERS),
         "(deny file-write*)",
         f'(allow file-write* (subpath "{lib_escaped}") (literal "/dev/null") (literal "/dev/dtracehelper"))',
     ]
@@ -1399,6 +1371,14 @@ def _build_macos_seatbelt_profile(library_root: Path, project_root: Path | None)
             proj_escaped = _sbpl_escape(resolved_proj)
             _emit_rule(f'(deny file-read* (subpath "{proj_escaped}"))')
 
+    # Recoverable deletions are written by library_write on the host side only,
+    # so the trash stores stay read-only even though they sit inside the library.
+    _emit_rule(
+        "(deny file-write* {})".format(
+            " ".join(f'(subpath "{_sbpl_escape(resolved_lib / name)}")' for name in _TRASH_DIRNAMES)
+        ),
+    )
+
     return "\n".join(lines)
 
 
@@ -1434,56 +1414,28 @@ def _has_unquoted_shell_operators(command: str) -> bool:
 
 
 def _build_direct_audited_fallback_argv(command: str) -> tuple[list[str] | None, str]:
-    """Build a zero-/bin/sh argv for audited Python -c or literal echo when kernel sandboxes are absent."""
+    """Build a literal ``echo`` argv for hosts without a kernel sandbox.
+
+    Without sandbox-exec or bwrap nothing constrains an interpreter: the audit
+    guard is ordinary Python in the child's own process and its checks live in
+    mutable module globals, so ``python -c`` here would run unsandboxed with a
+    guard the code it guards can reassign. That would void the read-only
+    ``<ProjectRoot>`` guarantee on every such host, so only a bare ``echo``
+    (no shell operators, nothing to interpret) is allowed to run this way.
+    """
     if _has_unquoted_shell_operators(command):
         return None, "unavailable"
     try:
         tokens = shlex.split(command, posix=True)
     except ValueError:
         return None, "unavailable"
-    if not tokens:
+    if not tokens or tokens[0] not in {"echo", "/bin/echo"}:
         return None, "unavailable"
 
-    head = tokens[0]
-    if head in {"echo", "/bin/echo"}:
-        echo_bin = "/bin/echo" if os.path.exists("/bin/echo") else (shutil.which("echo") or "")
-        if not echo_bin:
-            return None, "unavailable"
-        return [echo_bin, *tokens[1:]], "direct_echo_no_shell"
-
-    idx = 0
-    if head in {"env", "/usr/bin/env"}:
-        if len(tokens) < 4:
-            return None, "unavailable"
-        idx = 1
-        head = tokens[idx]
-
-    py_basenames = {"python", "python3", f"python{sys.version_info.major}.{sys.version_info.minor}"}
-    head_name = os.path.basename(head)
-    if head_name not in py_basenames:
+    echo_bin = "/bin/echo" if os.path.exists("/bin/echo") else (shutil.which("echo") or "")
+    if not echo_bin:
         return None, "unavailable"
-    if os.path.isabs(head) and not head.startswith(_ALLOWED_SYSTEM_EXEC_PREFIXES):
-        return None, "unavailable"
-
-    rest = tokens[idx + 1 :]
-    allowed_flags: list[str] = []
-    while rest and rest[0].startswith("-") and rest[0] != "-c":
-        if rest[0] in {"-B", "-u"}:
-            allowed_flags.append(rest.pop(0))
-        else:
-            return None, "unavailable"
-
-    if len(rest) != 2 or rest[0] != "-c" or not rest[1]:
-        return None, "unavailable"
-
-    py_bin = (
-        sys.executable
-        if not getattr(sys, "frozen", False) and sys.executable and os.path.exists(sys.executable)
-        else (shutil.which("python3") or shutil.which("python") or "")
-    )
-    if not py_bin:
-        return None, "unavailable"
-    return [py_bin, "-B", *allowed_flags, "-c", rest[1]], "python_audit_exec"
+    return [echo_bin, *tokens[1:]], "direct_echo_no_shell"
 
 
 def _build_sandboxed_exec_argv(
@@ -1555,6 +1507,15 @@ def _build_sandboxed_exec_argv(
             ):
                 mounted_targets.add(str(resolved_proj))
                 argv.extend(["--tmpfs", str(resolved_proj)])
+        # Same trash guarantee as the Seatbelt profile: readable, never writable.
+        for trash_name in _TRASH_DIRNAMES:
+            trash_dir = _lexical_norm_path(resolved_lib / trash_name)
+            is_existing_dir = False
+            with contextlib.suppress(OSError):
+                is_existing_dir = trash_dir.is_dir()
+            if is_existing_dir and str(trash_dir) not in mounted_targets:
+                mounted_targets.add(str(trash_dir))
+                argv.extend(["--ro-bind", str(trash_dir), str(trash_dir)])
         for host_home in _resolve_real_host_homes():
             if _lexical_norm_path(host_home) == _lexical_norm_path(resolved_lib):
                 continue
@@ -1589,17 +1550,6 @@ def _build_sandboxed_exec_argv(
         argv.extend(["--chdir", str(resolved_lib), "/bin/sh", "-c", command])
         return argv, "linux_bwrap"
     return _build_direct_audited_fallback_argv(command)
-
-
-def _terminate_process_group(proc: asyncio.subprocess.Process) -> None:
-    if proc.returncode is not None:
-        return
-    if proc.pid:
-        with contextlib.suppress(ProcessLookupError, PermissionError, OSError, AttributeError):
-            os.killpg(proc.pid, signal.SIGKILL)
-            return
-    with contextlib.suppress(ProcessLookupError, OSError):
-        proc.kill()
 
 
 def _build_library_exec_env(
@@ -1766,7 +1716,8 @@ async def _handle_library_exec(context: ToolContext, args: dict[str, Any]) -> di
             "error": "sandbox_unavailable",
             "detail": (
                 "library_exec requires an OS kernel sandbox (macOS Seatbelt sandbox-exec "
-                "or Linux bubblewrap bwrap) and fails closed when neither is available."
+                "or Linux bubblewrap bwrap) and fails closed when neither is available; "
+                "without one only a bare echo runs."
             ),
         }
     extra = context.extra if isinstance(context.extra, dict) else {}
@@ -1783,31 +1734,29 @@ async def _handle_library_exec(context: ToolContext, args: dict[str, Any]) -> di
         stderr=asyncio.subprocess.PIPE,
         start_new_session=True,
     )
-    comm_task = asyncio.create_task(proc.communicate())
+
+    def _stop_process_group() -> None:
+        _terminate_process_group(proc)
+
+    comm_task = asyncio.create_task(
+        _collect_process_output(proc, cap_bytes=_MAX_RAW_CAPTURE_BYTES, on_overflow=_stop_process_group)
+    )
     cancel_wait_task: asyncio.Task[bool] | None = (
         asyncio.create_task(cancel_event.wait()) if cancel_event is not None else None
     )
     try:
-        if cancel_wait_task is not None:
-            done, _ = await asyncio.wait(
-                {comm_task, cancel_wait_task},
-                timeout=timeout,
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            if cancel_wait_task in done:
-                _terminate_process_group(proc)
-                with contextlib.suppress(Exception):
-                    await comm_task
-                raise asyncio.CancelledError
-            if comm_task not in done:
-                raise asyncio.TimeoutError
-            raw_stdout, raw_stderr = comm_task.result()
-        else:
-            raw_stdout, raw_stderr = await asyncio.wait_for(comm_task, timeout=timeout)
+        waited = {comm_task, cancel_wait_task} if cancel_wait_task is not None else {comm_task}
+        # asyncio.wait never cancels the collector on deadline, so the pipes can
+        # still be drained after the group is stopped. A cancelled collector
+        # (wait_for) turned every plain timeout into a stray CancelledError.
+        done, _ = await asyncio.wait(waited, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
+        if cancel_wait_task is not None and cancel_wait_task in done:
+            raise asyncio.CancelledError
+        if comm_task not in done:
+            raise asyncio.TimeoutError
+        raw_stdout, raw_stderr, output_limit_hit = comm_task.result()
     except asyncio.TimeoutError:
-        _terminate_process_group(proc)
-        with contextlib.suppress(Exception):
-            await comm_task
+        await _abandon_process_group(proc, comm_task)
         return {
             "ok": False,
             "domain": "library_sandbox",
@@ -1815,21 +1764,38 @@ async def _handle_library_exec(context: ToolContext, args: dict[str, Any]) -> di
             "detail": f"library_exec timed out after {timeout:.1f}s.",
         }
     except BaseException:
-        _terminate_process_group(proc)
-        with contextlib.suppress(Exception):
-            await comm_task
+        await _abandon_process_group(proc, comm_task)
         raise
     finally:
         if cancel_wait_task is not None and not cancel_wait_task.done():
             cancel_wait_task.cancel()
 
-    decoded_stdout = raw_stdout[:_MAX_RAW_CAPTURE_BYTES].decode("utf-8", errors="replace")
-    decoded_stderr = raw_stderr[:_MAX_RAW_CAPTURE_BYTES].decode("utf-8", errors="replace")
+    decoded_stdout = raw_stdout.decode("utf-8", errors="replace")
+    decoded_stderr = raw_stderr.decode("utf-8", errors="replace")
+    if output_limit_hit:
+        return {
+            "ok": False,
+            "domain": "library_sandbox",
+            "sandbox_backend": sandbox_backend,
+            "exit_code": int(proc.returncode or 0),
+            "cwd": str(library_root),
+            "error": "output_limit_exceeded",
+            "detail": (
+                "library_exec wrote more than "
+                f"{_MAX_RAW_CAPTURE_BYTES * _EXEC_OVERFLOW_FACTOR} bytes to one stream and was "
+                "stopped. Print only what you need, or write the full output to a file."
+            ),
+            "stdout": truncate_tool_payload(decoded_stdout, limit=_MAX_EXEC_OUTPUT_BYTES),
+            "stderr": truncate_tool_payload(decoded_stderr, limit=_MAX_EXEC_OUTPUT_BYTES),
+            "truncated": True,
+            "auto_indexed_paths": [],
+        }
     stdout_text = truncate_tool_payload(decoded_stdout, limit=_MAX_EXEC_OUTPUT_BYTES)
     stderr_text = truncate_tool_payload(decoded_stderr, limit=_MAX_EXEC_OUTPUT_BYTES)
+    # The collector already capped the raw streams, so "at the cap" means cut.
     was_truncated = (
-        len(raw_stdout) > _MAX_RAW_CAPTURE_BYTES
-        or len(raw_stderr) > _MAX_RAW_CAPTURE_BYTES
+        len(raw_stdout) >= _MAX_RAW_CAPTURE_BYTES
+        or len(raw_stderr) >= _MAX_RAW_CAPTURE_BYTES
         or len(decoded_stdout) > _MAX_EXEC_OUTPUT_BYTES
         or len(decoded_stderr) > _MAX_EXEC_OUTPUT_BYTES
     )

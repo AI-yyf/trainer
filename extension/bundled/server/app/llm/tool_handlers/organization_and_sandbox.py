@@ -1348,22 +1348,37 @@ async def _handle_index_sandbox_file(context: ToolContext, args: dict[str, Any])
                 indexed = postprocessed[0]
             elif postprocessed is not None:
                 indexed = postprocessed
-            indexed = cast(Any, indexed).model_copy(update={"sandbox_path": absolute, "sandbox_dirty": False})
+            indexed = cast(Any, indexed).model_copy(update={"sandbox_dirty": False})
             if repository is not None and hasattr(repository, "save_resource"):
                 repository.save_resource(context.workspace_id, indexed)
     except Exception as exc:
         logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc), "path": relative}
     payload = _resource_model_payload(indexed)
+    # Post-processing syncs the canonical Markdown back into the sandbox and may
+    # replace a non-Markdown file in place (notes/a.py -> notes/a.md). The record
+    # it returns names the file that exists now; reporting or storing the path
+    # requested before indexing would leave the next read, edit or delete at
+    # "not found".
+    actual_absolute = str(payload.get("sandbox_path") or "").strip() or absolute
+    actual_relative = _path_relative_to_library(root, actual_absolute, fallback=relative)
     return {
         "ok": True,
         "committed": True,
-        "path": relative,
+        "path": actual_relative,
         "resource_id": payload.get("id"),
         "index_status": payload.get("index_status"),
-        "sandbox_path": payload.get("sandbox_path") or absolute,
+        "sandbox_path": actual_absolute,
         "resource": payload,
     }
+
+
+def _path_relative_to_library(root: str | Path, candidate: str, *, fallback: str) -> str:
+    """Library-relative POSIX form of ``candidate`` when it sits inside ``root``."""
+    try:
+        return Path(candidate).resolve().relative_to(Path(root).resolve()).as_posix()
+    except (ValueError, OSError):
+        return fallback
 
 
 async def _handle_inspect_current_file(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
@@ -1401,3 +1416,95 @@ async def _handle_inspect_current_file(context: ToolContext, args: dict[str, Any
         result["selection_text"] = selection_text[:max_chars]
         result["selection_truncated"] = len(selection_text) > max_chars
     return result
+
+
+# ---------------------------------------------------------------------------
+# Auto-indexing of <LibraryRoot> files after every library mutation
+# ---------------------------------------------------------------------------
+
+_INDEXABLE_LIBRARY_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".md",
+        ".markdown",
+        ".txt",
+        ".rst",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".csv",
+        ".py",
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+        ".html",
+        ".htm",
+        ".tex",
+        ".pdf",
+        ".epub",
+        ".docx",
+    }
+)
+
+
+def _path_after_index(existing: object, *, requested: str) -> str:
+    """The library-relative path of a file once auto-indexing is done.
+
+    Indexing canonicalises a non-Markdown file in place (``notes/a.py`` becomes
+    ``notes/a.md``) and removes the requested one. Callers must hand back the path
+    that exists, or the next read, edit or delete on it answers "not found".
+    """
+    return existing if isinstance(existing, str) and existing.strip() else requested
+
+
+async def _auto_index_library_path(
+    context: ToolContext,
+    relative_path: str,
+    *,
+    tags: list[str] | None = None,
+) -> dict[str, Any]:
+    """Ensure a file inside <LibraryRoot> is indexed in SQLite FTS5 right after mutation."""
+    sandbox_service = _sandbox_service(context)
+    resource_service = (
+        getattr(context.runtime, "resource_service", None) if context.runtime is not None else None
+    )
+    if sandbox_service is None or resource_service is None:
+        return {"auto_indexed": False, "reason": "service_unavailable"}
+    try:
+        root = Path(sandbox_service.ensure_operation_root(context.workspace_id)).resolve()
+        candidate = (root / relative_path).resolve()
+        if not candidate.exists() or not candidate.is_file():
+            return {"auto_indexed": False, "reason": "not_a_file"}
+        if candidate.suffix.lower() not in _INDEXABLE_LIBRARY_EXTENSIONS:
+            return {"auto_indexed": False, "reason": "extension_skipped"}
+        existing = _match_resource_by_sandbox_path(
+            context.runtime, context.workspace_id, relative_path
+        )
+        if existing is not None:
+            reindexed = _reindex_matching_sandbox_resource(context, relative_path)
+            return {
+                "auto_indexed": True,
+                "mode": "reindexed",
+                "resource_id": getattr(existing, "id", None),
+                "path": relative_path,
+                "library": reindexed,
+            }
+        indexed = await _handle_index_sandbox_file(
+            context,
+            {
+                "path": relative_path,
+                "name": Path(relative_path).name,
+                **({"tags": tags} if tags else {}),
+            },
+        )
+        return {
+            "auto_indexed": bool(indexed.get("ok")),
+            "mode": "indexed_new",
+            "resource_id": indexed.get("resource_id"),
+            "path": _path_after_index(indexed.get("path"), requested=relative_path),
+            "library": indexed,
+        }
+    except Exception as exc:  # noqa: BLE001 - best-effort auto-indexing never fails the write
+        logger.warning("library_auto_index_failed path=%s err=%s", relative_path, exc)
+        return {"auto_indexed": False, "reason": exc.__class__.__name__, "detail": str(exc)}
