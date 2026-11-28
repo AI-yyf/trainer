@@ -300,6 +300,16 @@ class AgenticExecutionMixin:
         from ..tools import ToolContext, build_default_tool_registry
 
         history_limit, history_token_budget = self._smart_coaching_history_budget()
+        # The tool scope is decided before the prompt: a turn that mounts no tools (a short
+        # follow-up beside a live error) must not be told it is running inside a tool loop.
+        tool_context_extra = _build_agent_tool_context_extra(
+            coach_context=coach_context,
+            attachment_delivery=attachment_delivery,
+            answer_mode=answer_mode or profile.answer_policy,
+            current_file=current_file,
+            provider_config=self._config,
+            learner_message=message,
+        )
         messages = build_coaching_messages(
             profile,
             message,
@@ -307,7 +317,7 @@ class AgenticExecutionMixin:
             response_language=response_language,
             answer_mode=answer_mode,
             coach_context=coach_context,
-            agent_loop_enabled=True,
+            agent_loop_enabled=tool_context_extra.get("allowed_tool_names") != [],
             history=history,
             history_limit=history_limit,
             history_token_budget=history_token_budget,
@@ -375,14 +385,7 @@ class AgenticExecutionMixin:
             session_id=session_id or None,
             profile=profile,
             response_language=response_language,
-            extra=_build_agent_tool_context_extra(
-                coach_context=coach_context,
-                attachment_delivery=attachment_delivery,
-                answer_mode=answer_mode or profile.answer_policy,
-                current_file=current_file,
-                provider_config=self._config,
-                learner_message=message,
-            ),
+            extra=tool_context_extra,
         )
         loop = CoachAgentLoop(
             provider=provider_obj,
@@ -932,6 +935,16 @@ class AgenticExecutionMixin:
         from ..tools import ToolContext, build_default_tool_registry
 
         history_limit, history_token_budget = self._smart_coaching_history_budget()
+        # The tool scope is decided before the prompt: a turn that mounts no tools (a short
+        # follow-up beside a live error) must not be told it is running inside a tool loop.
+        tool_context_extra = _build_agent_tool_context_extra(
+            coach_context=coach_context,
+            attachment_delivery=attachment_delivery,
+            answer_mode=answer_mode or profile.answer_policy,
+            current_file=current_file,
+            provider_config=self._config,
+            learner_message=message,
+        )
         messages = build_coaching_messages(
             profile,
             message,
@@ -939,7 +952,7 @@ class AgenticExecutionMixin:
             response_language=response_language,
             answer_mode=answer_mode,
             coach_context=coach_context,
-            agent_loop_enabled=True,
+            agent_loop_enabled=tool_context_extra.get("allowed_tool_names") != [],
             history=history,
             history_limit=history_limit,
             history_token_budget=history_token_budget,
@@ -1013,14 +1026,7 @@ class AgenticExecutionMixin:
             session_id=session_id or None,
             profile=profile,
             response_language=response_language,
-            extra=_build_agent_tool_context_extra(
-                coach_context=coach_context,
-                attachment_delivery=attachment_delivery,
-                answer_mode=answer_mode or profile.answer_policy,
-                current_file=current_file,
-                provider_config=self._config,
-                learner_message=message,
-            ),
+            extra=tool_context_extra,
         )
         loop = CoachAgentLoop(
             provider=provider_obj,

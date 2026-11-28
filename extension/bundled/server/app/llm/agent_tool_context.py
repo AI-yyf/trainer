@@ -23,6 +23,85 @@ _FORMAL_PLAN_TOOLS = (
 )
 
 
+#: A nudge ("然后呢？", "下一步？", "这样对吗？") is at most this many characters. Longer messages
+#: ask for something and keep their tools.
+SHORT_FOLLOW_UP_MAX_CHARS = 24
+
+#: Substrings with which a learner asks for something a tool has to fetch or run. Any hit keeps the
+#: tools mounted: the lane only covers a nudge, and a wrongly tool-free turn costs more than a
+#: needless round trip, so the list errs towards matching.
+_TOOL_SEEKING_TOKENS: frozenset[str] = frozenset(
+    {
+        # Chinese
+        "运行", "跑一", "跑下", "测试", "验证", "检查", "执行", "搜索", "搜一", "查找", "找一", "看看", "看一下",
+        "读一", "读下", "打开", "项目", "工程", "文件夹", "目录", "整个", "所有", "其他", "别的", "另外", "资料",
+        "讲讲", "讲解", "解释", "分析", "原理", "计划", "复习", "卡片", "笔记", "讲稿", "保存", "生成", "创建",
+        "新建", "截图", "图片", "网页", "链接", "对比", "列出", "查",
+        # The Latin product languages (English, Spanish, French, German, Portuguese)
+        "run", "test", "verif", "verifica", "check", "search", "find", "look", "read", "open", "project",
+        "repo", "folder", "file", "explain", "expli", "explique", "erklär", "analy", "analyse", "walk",
+        "overview", "plan", "review", "save", "guarda", "speicher", "enregistre", "note", "card",
+        "generate", "create", "fetch", "url", "link", "list", "liste", "show", "ejecu", "exécute",
+        "ausführen", "prüf", "such", "cherch", "busca",
+    }
+)
+
+#: Coaching-context flags that open another lane (plan, cards, notes, resources, verification).
+#: Any of them keeps the tools.
+_TOOL_LANE_FLAGS: tuple[str, ...] = (
+    "formal_plan_mutation",
+    "explicit_training_card_request",
+    "explicit_learning_note_request",
+    "explicit_lecture_note_save_request",
+    "explicit_resource_import",
+    "explicit_resource_organize",
+    "auto_resource_lookup",
+    "library_sandbox_work",
+    "rubric_review_allowed",
+    "completed_training_return_feedback",
+)
+
+
+def short_follow_up_next_to_live_error(
+    *,
+    message: str | None,
+    current_file: dict[str, object] | None,
+    coach_context: dict[str, Any] | None,
+    attachments_present: bool = False,
+) -> bool:
+    """Whether a turn is a short follow-up typed beside a file that shows a live error.
+
+    Everything the next nudge needs is already in the prompt — the open file, its diagnostics,
+    the thread's last step — so the turn is answered in one model call with no tools mounted.
+    Measured with a real model (2026-11-28): with tools the model spent two or three round trips
+    (7-28 s to its first visible word); without, one call and a median of 3 s.
+
+    The lane is narrow on purpose. It needs a short single-line message without code, without a
+    word that asks for a tool, live diagnostics on the open file, no attachment, and no other
+    coaching lane involved.
+    """
+    text = str(message or "").strip()
+    if not text or not isinstance(current_file, dict):
+        return False
+    if len(text) > SHORT_FOLLOW_UP_MAX_CHARS or "\n" in text or "```" in text:
+        return False
+    diagnostics = current_file.get("diagnostics")
+    if not isinstance(diagnostics, list) or not any(str(item or "").strip() for item in diagnostics):
+        return False
+    if attachments_present:
+        return False
+    lowered = text.lower()
+    if any(token in lowered for token in _TOOL_SEEKING_TOKENS):
+        return False
+    context = coach_context if isinstance(coach_context, dict) else {}
+    if any(context.get(flag) is True for flag in _TOOL_LANE_FLAGS):
+        return False
+    if context.get("resource_composer_intent") or context.get("resource_ids"):
+        return False
+    active_view = str(context.get("active_view") or "").strip().lower()
+    return active_view in {"", "coach"}
+
+
 def _denied_auto_mint_tool_names(extra: dict[str, Any]) -> list[str]:
     from .tools import PROJECT_WRITE_TOOL_NAMES
 
@@ -189,11 +268,20 @@ def _build_agent_tool_context_extra(
         if isinstance(resolved_learner_message, str) and resolved_learner_message.strip():
             extra["learner_message"] = resolved_learner_message
         if "allowed_tool_names" not in extra:
-            from .tool_primitives import select_orthogonal_tools_for_turn
+            if short_follow_up_next_to_live_error(
+                message=resolved_learner_message,
+                current_file=current_file if isinstance(current_file, dict) else None,
+                coach_context=None,
+                attachments_present=bool(attachment_delivery.get("attachments_present")),
+            ):
+                extra["allowed_tool_names"] = []
+                extra["tool_free_fast_lane"] = True
+            else:
+                from .tool_primitives import select_orthogonal_tools_for_turn
 
-            extra["allowed_tool_names"] = select_orthogonal_tools_for_turn(
-                extra, resolved_learner_message
-            )
+                extra["allowed_tool_names"] = select_orthogonal_tools_for_turn(
+                    extra, resolved_learner_message
+                )
         return extra
 
     if isinstance(current_file, dict):
@@ -325,6 +413,14 @@ def _build_agent_tool_context_extra(
         current_file=current_file,
     ):
         extra["allowed_tool_names"] = []
+    elif short_follow_up_next_to_live_error(
+        message=resolved_learner_message,
+        current_file=current_file if isinstance(current_file, dict) else None,
+        coach_context=coach_context,
+        attachments_present=bool(attachment_delivery.get("attachments_present")),
+    ):
+        extra["allowed_tool_names"] = []
+        extra["tool_free_fast_lane"] = True
     elif "allowed_tool_names" not in extra:
         from .tool_primitives import select_orthogonal_tools_for_turn
 
