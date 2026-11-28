@@ -786,6 +786,21 @@ async function runWithQuiescentManagedData<T>(
   resolveNextManagedDataRoot?: (result: T) => string | undefined,
   options: { copyExistingData?: boolean } = {},
 ): Promise<{ result: T; restartedSidecar: boolean }> {
+  // From the stop to the installed folder, the sidecar is the only operation in flight: a request
+  // arriving meanwhile waits, instead of starting a process against the folder being replaced and
+  // then being killed by the switch (seen in the installed VSIX as a false "failed to start").
+  const transfer = () =>
+    transferManagedData(context, operation, resolveNextManagedDataRoot, options);
+  const manager = context.sidecarManager;
+  return manager?.withManagedDataSwitch ? manager.withManagedDataSwitch(transfer) : transfer();
+}
+
+async function transferManagedData<T>(
+  context: CommandContext,
+  operation: (managedDataRoot: string) => Promise<T>,
+  resolveNextManagedDataRoot: ((result: T) => string | undefined) | undefined,
+  options: { copyExistingData?: boolean },
+): Promise<{ result: T; restartedSidecar: boolean }> {
   const workspaceFolder = context.getHostState().workspace.workspaceFolder;
   const currentData = context.sidecarManager.getManagedDataFolderSnapshot(workspaceFolder);
   const priorLifecycle = context.sidecarManager.getStatus().lifecycle;
@@ -855,7 +870,7 @@ async function runWithQuiescentManagedData<T>(
   } finally {
     if (wasReady) {
       try {
-        const status = await context.sidecarManager.restart();
+        const status = await restartSidecarAfterManagedDataSwitch(context);
         if (!operationFailure && status.lifecycle !== 'ready') {
           throw new Error(status.detail ?? hostCommandCopy(lang, 'backendRestartFailedAfterTransfer'));
         }
@@ -866,6 +881,20 @@ async function runWithQuiescentManagedData<T>(
       }
     }
   }
+}
+
+/**
+ * The sidecar ran before this transfer, so it runs after it, against the folder now in use. A
+ * plain `restart()` would wait for the managed-data switch to finish — and this transfer is that
+ * switch — so it is stopped and started without waiting for it.
+ */
+async function restartSidecarAfterManagedDataSwitch(context: CommandContext) {
+  const manager = context.sidecarManager;
+  if (typeof manager?.ensureRunningAfterManagedDataSwitch === 'function') {
+    await manager.stop();
+    return manager.ensureRunningAfterManagedDataSwitch();
+  }
+  return manager.restart();
 }
 
 async function rehydrateAfterWorkspaceDataTransfer(

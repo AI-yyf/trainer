@@ -50,6 +50,14 @@ export interface ManagedDataRootScope {
   legacyWorkspaceFolder?: string;
 }
 
+/** A launch ended because a stop was requested before it became healthy; not a start failure. */
+export class SidecarStartInterruptedError extends Error {
+  constructor() {
+    super('Sidecar stopped.');
+    this.name = 'SidecarStartInterruptedError';
+  }
+}
+
 export class SidecarProcessManager implements vscode.Disposable {
   private readonly statusEmitter = new vscode.EventEmitter<SidecarStatus>();
   private readonly client = new SidecarHttpClient();
@@ -64,6 +72,12 @@ export class SidecarProcessManager implements vscode.Disposable {
   private process?: ChildProcessWithoutNullStreams;
   private ensurePromise?: Promise<SidecarStatus>;
   private startPromise?: Promise<SidecarStatus>;
+  // A managed-data switch (learning-folder change, migration, backup restore) in flight. Requests
+  // that need the sidecar wait for it instead of starting a process against the folder being replaced.
+  private managedDataSwitch?: Promise<void>;
+  // Bumped by every intentional stop, so a launch can tell "stopped on request" from a crash.
+  private requestedStops = 0;
+  private lastLaunchStoppedBySwitch = false;
   // Consecutive health probes the live child has missed. Any answered probe
   // or a new child resets the streak.
   private missedHealthProbes = 0;
@@ -242,6 +256,43 @@ export class SidecarProcessManager implements vscode.Disposable {
     };
   }
 
+  /**
+   * Run a managed-data switch as the only sidecar operation in flight. A launch that the switch
+   * stops is retried once the switch has installed the new folder; requests arriving meanwhile
+   * wait for the switch instead of racing it.
+   */
+  async withManagedDataSwitch<T>(operation: () => Promise<T>): Promise<T> {
+    let release = () => undefined as void;
+    const previous = this.managedDataSwitch;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.managedDataSwitch = gate;
+    try {
+      await previous;
+      return await operation();
+    } finally {
+      release();
+      if (this.managedDataSwitch === gate) {
+        this.managedDataSwitch = undefined;
+      }
+    }
+  }
+
+  private async waitForManagedDataSwitch(): Promise<void> {
+    while (this.managedDataSwitch) {
+      await this.managedDataSwitch;
+    }
+  }
+
+  /**
+   * Start the sidecar against the folder a switch has just installed. Only the switch itself calls
+   * this, so it must not wait for the switch; requests that arrived meanwhile join its result.
+   */
+  async ensureRunningAfterManagedDataSwitch(): Promise<SidecarStatus> {
+    return this.ensureRunningInternal(false);
+  }
+
   async ensureRunning(): Promise<SidecarStatus> {
     if (this.ensurePromise) {
       return this.ensurePromise;
@@ -258,7 +309,10 @@ export class SidecarProcessManager implements vscode.Disposable {
     }
   }
 
-  private async ensureRunningInternal(): Promise<SidecarStatus> {
+  private async ensureRunningInternal(waitForSwitch = true): Promise<SidecarStatus> {
+    if (waitForSwitch) {
+      await this.waitForManagedDataSwitch();
+    }
     if (this.managedDataScopeRestartPending) {
       await this.stop();
       this.managedDataScopeRestartPending = false;
@@ -323,9 +377,19 @@ export class SidecarProcessManager implements vscode.Disposable {
       this.process = undefined;
     }
 
+    this.lastLaunchStoppedBySwitch = false;
     this.startPromise = this.start();
     try {
       return await this.startPromise;
+    } catch (error) {
+      if (error instanceof SidecarStartInterruptedError && this.lastLaunchStoppedBySwitch) {
+        // The switch that stopped this launch restarts the sidecar itself; nobody else may observe
+        // the rejected launch meanwhile, so release it before waiting for the switch to finish.
+        this.startPromise = undefined;
+        await this.waitForManagedDataSwitch();
+        return this.ensureRunningInternal();
+      }
+      throw error;
     } finally {
       this.startPromise = undefined;
     }
@@ -355,6 +419,7 @@ export class SidecarProcessManager implements vscode.Disposable {
     }
 
     const process = this.process;
+    this.requestedStops += 1;
     const didExit = await this.terminateChild(process);
 
     if (!didExit) {
@@ -468,6 +533,9 @@ export class SidecarProcessManager implements vscode.Disposable {
         try {
           return await this.launchCandidate(candidate, port);
         } catch (error) {
+          if (error instanceof SidecarStartInterruptedError) {
+            throw error;
+          }
           lastError = error instanceof Error ? error : new Error(String(error));
           this.logSidecarLine(
             `[sidecar] launch failed for ${candidate.command}: ${lastError.message}`,
@@ -553,6 +621,7 @@ export class SidecarProcessManager implements vscode.Disposable {
 
     const commandLine = `${candidate.command} ${candidate.args.join(' ')}`;
     this.process = child;
+    const stopMark = this.requestedStops;
     this.missedHealthProbes = 0;
     this.updateStatus({
       lifecycle: 'starting',
@@ -583,6 +652,23 @@ export class SidecarProcessManager implements vscode.Disposable {
       const tail = stderrTail.trim();
       const enrichedDetail = tail ? `${detail}\nSidecar output: ${tail}` : detail;
       const didExit = await this.terminateChild(child);
+      if (this.requestedStops !== stopMark) {
+        // stop() arrived while this launch was still waiting for its health check: the process was
+        // replaced on purpose. That is not a failed start and must not be reported as one.
+        child.removeAllListeners('exit');
+        child.removeAllListeners('error');
+        this.lastLaunchStoppedBySwitch = this.managedDataSwitch !== undefined;
+        if (this.process === child) {
+          this.process = undefined;
+        }
+        this.updateStatus({
+          lifecycle: 'stopped',
+          host: SIDECAR_DEFAULTS.host,
+          canStart: this.status.canStart,
+          detail: 'Sidecar stopped.',
+        });
+        throw new SidecarStartInterruptedError();
+      }
       if (!didExit) {
         const message = `Sidecar failed to start and did not stop cleanly: ${enrichedDetail}`;
         this.updateStatus({
