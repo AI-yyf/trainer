@@ -15,10 +15,13 @@ is never used, and a label a model wraps in backticks or quotes is still read.
 
 from __future__ import annotations
 
-from app.core.model_domains.foundations_and_provider import UserProfile
+import re
+
+from app.core.model_domains.foundations_and_provider import ProviderConfig, UserProfile
 from app.llm.agent_loop import _build_completion_continuity
 from app.llm.coaching_replies import _agentic_completion_continuity
 from app.llm.prompt_domains.scenario_and_context_blocks import build_coaching_system_prompt
+from app.llm.provider_service import ProviderService
 from app.llm.reply_continuity import closing_action_step, visible_next_step
 
 # Excerpt of a real MiniMax-M2.7 reply (2026-11-28) to "这段为什么会报 KeyError？"; structure kept,
@@ -193,3 +196,95 @@ def test_no_server_sentence_is_appended_after_the_coachs_own_labelled_action() -
         )
         == "这一步算过的信号是：重复调用只记一笔。"
     )
+
+
+def _review_context() -> dict[str, object]:
+    return {
+        "scenario": "review",
+        "failing_checks": ["tests/test_retry.py"],
+        "exercise_prompt": {"prompt": "Restore the first failing check.", "success_signal": "The check passes."},
+    }
+
+
+def _service() -> ProviderService:
+    return ProviderService(
+        config=ProviderConfig(
+            name="postprocess",
+            baseUrl="https://api.openai.com/v1",
+            apiKeyRef="trainer.test",
+            model="gpt-4o-mini",
+        ),
+        api_key="sk-test",
+    )
+
+
+def test_no_server_sentence_of_any_kind_follows_the_coachs_own_labelled_action() -> None:
+    """Seen with a real model: "下一步：在 `app.py` 改用…" was followed by the server's "先别扩范围。
+    先恢复一条最小反馈链…". Every server-composed addition now stops before a reply that ends
+    with the coach's own action."""
+    service = _service()
+    reply = "现在入口已能读取 `port`，但缺少 `retries`。\n\n下一步：在 `app.py` 改用带回退值的字典读取，再运行。"
+
+    assert (
+        service._postprocess_coaching_reply(
+            reply,
+            profile=UserProfile(long_term_goal="x", weekly_hours=4, teaching_style="guided", answer_policy="guided"),
+            message="然后呢？",
+            current_file={"path": "app.py", "language_id": "python", "content": "print(1)"},
+            response_language="zh-CN",
+            answer_mode="guided",
+            coach_context=_review_context(),
+        )
+        == reply
+    )
+    # The same context still adds its guidance to a reply that has no action of its own.
+    unlabelled = "现在入口已能读取 `port`，但缺少 `retries`。"
+    patched = service._postprocess_coaching_reply(
+        unlabelled,
+        profile=UserProfile(long_term_goal="x", weekly_hours=4, teaching_style="guided", answer_policy="guided"),
+        message="然后呢？",
+        current_file={"path": "app.py", "language_id": "python", "content": "print(1)"},
+        response_language="zh-CN",
+        answer_mode="guided",
+        coach_context=_review_context(),
+    )
+    assert patched.startswith(unlabelled)
+    assert patched != unlabelled
+
+
+def test_a_review_reminder_is_not_passed_off_as_the_signal_of_success() -> None:
+    """Seen with a real model: a one-line hint was followed by "这一步算过的信号是：回到最近这一轮
+    教练主线，先把这一步验证掉：…" — the review scheduler's reminder, dressed as a verification
+    signal. The scheduler's sentences name what to redo; a signal names what will be observed."""
+    from app.llm.coaching_reply_drafts import _compose_success_signal_patch
+
+    hint = "提示：给每次退款请求一个幂等键，把键到结果的对应记在独立的表里。"
+    for reminder in (
+        "回到最近这一轮教练主线，先把这一步验证掉：在 charge 里让 append 之后抛 TimeoutError。",
+        "回到上一轮教练已经压好的这一步，先做完或验证它：补上 retries 配置。",
+        "Return to the latest coach turn and verify this next move: add the retries key.",
+    ):
+        patch = _compose_success_signal_patch(
+            reply=hint, exercise_prompt={"success_signal": reminder}, chinese=True
+        )
+        assert patch == "", reminder
+    assert (
+        _compose_success_signal_patch(
+            reply=hint, exercise_prompt={"success_signal": "连续调用两次 refund 后 REFUNDED 只有一条"}, chinese=True
+        )
+        == "这一步算过的信号是：连续调用两次 refund 后 REFUNDED 只有一条。"
+    )
+
+
+def test_a_pronoun_fragment_is_not_an_anchor_of_the_learner_s_request() -> None:
+    """Seen with a real model: the stored next step read "围绕 `refunds.py`、「我在」，先在 …" —
+    "我在" is the start of "我在 refunds.py 里也碰到…", not a subject."""
+    from app.llm.coaching_replies import _request_relevance_anchor_terms
+
+    terms = _request_relevance_anchor_terms(
+        "我在 refunds.py 里也碰到类似的超时重试问题，这次我想自己修，只给我一句提示就好。",
+        current_file={"path": "/repo/refunds.py"},
+    )
+
+    assert "refunds.py" in terms
+    assert all(not re.match(r"^(我|你|他|她|它|我们|你们|在|的)", term) for term in terms), terms

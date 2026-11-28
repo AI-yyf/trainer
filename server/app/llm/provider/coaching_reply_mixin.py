@@ -80,6 +80,7 @@ from ..prompts import (
 from ..provider_protocols import (
     normalize_provider_response,
 )
+from ..reply_continuity import visible_next_step
 from ..vision_challenge import build_vision_challenge as _real_build_vision_challenge
 from .assessment import (
     _as_mapping,
@@ -700,6 +701,11 @@ class CoachingReplyMixin:
             )
         )
         if not has_structured_context:
+            return reply
+        # The coach ended with its own labelled action, and that is the last line the learner
+        # reads. A server-composed sentence after it rides on the coach's words (seen with a real
+        # model: "下一步：…" followed by "先别扩范围。先恢复一条最小反馈链…").
+        if visible_next_step(reply):
             return reply
 
         additions: list[str] = []

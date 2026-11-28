@@ -417,6 +417,23 @@ def _compose_review_tightening_patch(
     return "Do not widen scope on this turn. First restore one minimal feedback loop, confirm this step passes, then decide whether to expand."
 
 
+#: Openings of the review scheduler's reminders. A reminder names what to redo ("回到最近这一轮教练主线，
+#: 先把这一步验证掉：…"); a success signal names what will be observed. Seen with a real model: a reminder
+#: was appended to a reply as "这一步算过的信号是：回到最近这一轮教练主线，…".
+_THREAD_REMINDER_PATTERN = re.compile(
+    r"^(?:\u56de\u5230\u6700\u8fd1\u8fd9\u4e00\u8f6e\u6559\u7ec3\u4e3b\u7ebf"
+    r"|\u56de\u5230\u4e0a\u4e00\u8f6e\u6559\u7ec3\u5df2\u7ecf\u538b\u597d\u7684\u8fd9\u4e00\u6b65"
+    r"|\u6cbf\u7740\u5f53\u524d\u4e3b\u7ebf\u7ee7\u7eed|\u6cbf\u7740\u540c\u4e00\u6761\u6559\u7ec3\u7ebf\u7a0b"
+    r"|Return to the latest coach turn|Return to the previous coach|Resume the live thread"
+    r"|Back to the (?:latest|previous) coach)",
+    re.IGNORECASE,
+)
+
+
+def _is_thread_reminder(text: str) -> bool:
+    return bool(_THREAD_REMINDER_PATTERN.match(text.strip()))
+
+
 def _compose_success_signal_patch(
     *,
     reply: str,
@@ -430,6 +447,8 @@ def _compose_success_signal_patch(
     if not success_signal:
         return ""
     if _contains_meta_coach_context(success_signal):
+        return ""
+    if _is_thread_reminder(success_signal):
         return ""
     if _reply_mentions_excerpt(reply, success_signal):
         return ""

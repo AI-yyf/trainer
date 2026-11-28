@@ -1685,6 +1685,14 @@ def _request_relevance_anchor_terms(
                 "",
                 phrase,
             )
+            # "我在 refunds.py 里也碰到…" opens with a pronoun and a preposition, not a subject:
+            # left in, it became the anchor 「我在」 of a stored next step (seen with a real model).
+            phrase = re.sub(
+                r"^(?:\u6211\u4eec|\u4f60\u4eec|\u4ed6\u4eec|\u5979\u4eec|\u5b83\u4eec|\u6211|\u4f60|\u4ed6|\u5979|\u5b83)+"
+                r"(?:\u5728|\u7684|\u628a|\u7ed9|\u8ddf|\u548c|\u4e0e|\u4e5f|\u90fd)*",
+                "",
+                phrase,
+            )
             if len(phrase) >= 2:
                 candidates.append(phrase[:12])
 
