@@ -30,6 +30,7 @@ from .coaching_replies import (
 from .prompts import normalize_answer_policy
 from .provider.redaction import redact_provider_error
 from .provider.text import _contains_cjk, _visible_model_text
+from .reply_continuity import visible_next_step
 
 
 def _agent_result_visible_text(result: Any) -> str:
@@ -433,6 +434,11 @@ def _compose_success_signal_patch(
     if _reply_mentions_excerpt(reply, success_signal):
         return ""
     if _reply_has_verification_signal(reply, chinese) and len(reply) > 180:
+        return ""
+    # The reply ends with the coach's own labelled action: a server-composed sentence after it
+    # reads as part of the coach's words (seen with a real model: "…下一步：在 refund 里补上判断…"
+    # followed by "这一步算过的信号是：回到最近这一轮教练主线，…", a thread reminder, not a signal).
+    if visible_next_step(reply):
         return ""
     # success_signal routinely arrives sentence-terminated; the wrapper adds its
     # own full stop, so strip one trailing mark to avoid "。。" on the wire.

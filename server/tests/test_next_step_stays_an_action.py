@@ -166,3 +166,30 @@ def test_every_coaching_prompt_asks_for_one_labelled_closing_action() -> None:
         prompt = build_coaching_system_prompt(profile, language, "guided", agent_loop_enabled=True)
 
         assert "下一步：" in prompt or "Next step:" in prompt, language
+
+
+def test_no_server_sentence_is_appended_after_the_coachs_own_labelled_action() -> None:
+    """Seen with a real model: the coach's "下一步：…" line was followed by a server-composed
+    "这一步算过的信号是：回到最近这一轮教练主线…" — a thread reminder, not a signal, riding on the
+    coach's words. A reply that ends with its own action is left as it is."""
+    from app.llm.coaching_reply_drafts import _compose_success_signal_patch
+
+    reply = "提示：在 `refund()` 里，先用同一个 `order_id` 查一次。\n\n下一步：在 refund 里补上判断并让重复调用只记一笔"
+
+    assert (
+        _compose_success_signal_patch(
+            reply=reply,
+            exercise_prompt={"success_signal": "回到最近这一轮教练主线，先把这一步验证掉。"},
+            chinese=True,
+        )
+        == ""
+    )
+    # A reply without an action of its own still gets the signal.
+    assert (
+        _compose_success_signal_patch(
+            reply="提示：在 `refund()` 里，先用同一个 `order_id` 查一次。",
+            exercise_prompt={"success_signal": "重复调用只记一笔"},
+            chinese=True,
+        )
+        == "这一步算过的信号是：重复调用只记一笔。"
+    )
