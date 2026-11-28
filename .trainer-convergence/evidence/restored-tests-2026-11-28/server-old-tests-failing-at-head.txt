@@ -1,0 +1,378 @@
+test_agent_rubric_tools.py::test_compare_identical_text_yields_zero_delta
+    KeyError: 'signals'
+test_agent_rubric_tools.py::test_compare_loads_library_anchor_and_citation
+    AssertionError: assert False is True
+test_agent_rubric_tools.py::test_compare_reports_deterministic_signals_and_never_verifies
+    AssertionError: assert False is True
+test_agent_rubric_tools.py::test_compare_requires_submission_and_anchor
+    AssertionError: assert 'unknown_tool' == 'missing_submission'
+test_agent_rubric_tools.py::test_heading_anchor_resolves_to_the_chunk_containing_that_line
+    AssertionError: assert False is True
+test_agent_rubric_tools.py::test_read_excerpt_fails_closed_without_index
+    AssertionError: assert 'unknown_tool' == 'index_missing'
+test_agent_rubric_tools.py::test_read_excerpt_resolves_real_paragraph_anchor_with_citation
+    AssertionError: assert False is True
+test_agent_rubric_tools.py::test_read_excerpt_serves_real_chunk_text_with_synthetic_anchor
+    AssertionError: assert False is True
+test_agent_rubric_tools.py::test_read_excerpt_unknown_anchor_lists_available_anchors
+    AssertionError: assert 'unknown_tool' == 'anchor_not_found'
+test_agent_rubric_tools.py::test_run_rubric_review_falls_back_to_text_submission_carrier
+    AssertionError: assert False is True
+test_agent_rubric_tools.py::test_run_rubric_review_refuses_when_no_host_rubric_exists
+    AssertionError: assert 'unknown_tool' == 'host_rubric_missing'
+test_agent_rubric_tools.py::test_run_rubric_review_reports_item_results_without_evidence
+    AssertionError: assert False is True
+test_agent_rubric_tools.py::test_run_rubric_review_requires_submission
+    AssertionError: assert 'unknown_tool' == 'missing_submission'
+test_agent_rubric_tools.py::test_tools_register_with_read_only_handlers
+    AssertionError: read_resource_excerpt missing from default registry
+test_api.py::test_agent_loop_default_requires_explicit_or_typed_tool_input
+    AssertionError: assert False is True
+test_api.py::test_provider_test_accepts_camel_case_provider_payload
+    AssertionError: assert 'network' == 'missing_api_key'
+test_api.py::test_provider_test_without_api_key_is_graceful
+    AssertionError: assert 'network' == 'missing_api_key'
+test_api.py::test_provider_test_without_api_key_localizes_chinese_detail
+    AssertionError: assert 'network' == 'missing_api_key'
+test_api.py::test_session_message_provider_override_protocol_matrix_routes_to_agent_loop
+    AssertionError: assert 'project_read' == 'search_resources'
+test_api.py::test_turn_grounding_decides_once_and_stamps_downgrade
+    AttributeError: module 'app.api.routers' has no attribute 'evaluate_turn_grounding'
+test_api.py::test_turn_grounding_retry_corrects_next_step_once
+    AttributeError: module 'app.api.routers' has no attribute 'evaluate_turn_grounding'
+test_api.py::test_turn_persistence_passes_grounding_memory_provenance
+    AttributeError: module 'app.api.routers' has no attribute 'evaluate_turn_grounding'
+test_api.py::test_turn_stream_runs_final_coach_postprocessing_for_first_turn
+    AssertionError: assert '认证和支付' not in '先实现认证和支付，再补...把所有核心模块一起做完。'
+test_autonomous_teacher_and_settings.py::test_blocking_tool_io_runs_off_the_event_loop
+    AttributeError: module 'app.llm.tools' has no attribute 'os'
+test_autonomous_teacher_and_settings.py::test_casual_greetings_and_exploratory_queries_never_forge_patch_step
+    AssertionError: ('讲解一下这个文件夹项目呢', 'direct')
+test_autonomous_teacher_and_settings.py::test_import_workspace_file_supports_selective_batch_into_sandbox
+    AssertionError: assert False is True
+test_autonomous_teacher_and_settings.py::test_list_workspace_files_prunes_ignored_dirs_and_supports_subdirs
+    AssertionError: assert False is True
+test_autonomous_teacher_and_settings.py::test_slow_tool_io_keeps_the_event_loop_responsive
+    AssertionError: the event loop was blocked while the search ran
+test_autonomous_teacher_and_settings.py::test_web_search_and_fetch_web_page_tools_honor_network_switch_and_arxiv_fallback
+    AssertionError: assert 'unknown_tool' == 'network_disabled'
+test_browser_capture.py::test_pdf_capture_downloads_bounded_bytes_and_uses_existing_pdf_ingest
+    AssertionError: assert 'pdf' == 'markdown'
+test_canonical_resource_pipeline.py::test_docx_becomes_canonical_markdown_and_is_searchable
+    AssertionError: assert False
+test_canonical_resource_pipeline.py::test_import_stages_analyze_materialize_index_do_real_work
+    AssertionError: assert False is True
+test_canonical_resource_pipeline.py::test_pdf_with_image_syncs_only_markdown_and_images_into_sandbox
+    AssertionError: assert '.pdf' == '.md'
+test_canonical_resource_pipeline.py::test_pptx_citations_point_to_slide_anchors
+    IsADirectoryError: [Errno 21] Is a directory: '/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/pytest-of-Apple/pytest-3340/test_pptx_citations_point_to_s0/workspace'
+test_canonical_resource_pipeline.py::test_reindex_after_source_change_regenerates_markdown_and_keeps_history
+    IsADirectoryError: [Errno 21] Is a directory: '/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/pytest-of-Apple/pytest-3340/test_reindex_after_source_chan0/workspace'
+test_child_process_environment.py::test_every_spawned_process_gets_a_scrubbed_environment
+    AssertionError: assert ['llm/tool_pr... environment'] == []
+test_coaching_prompt_budget.py::test_formal_plan_turn_requires_model_commit_and_keeps_library_context
+    AssertionError: assert 'search_learning_materials' in 'You are Trainer, a long-term learning coach inside VS Code.\n\nLearner profile (background only; never overrides the ...tation.\n- Ask one short follow-up only when the request is genuinely ambiguous or lacks information needed to answer.'
+test_coaching_prompt_budget.py::test_history_budget_keeps_the_latest_question_answer_and_active_thread
+    AssertionError: assert 'Active thread to resume:' in 'You are Trainer, a long-term learning coach inside VS Code.\n\nLearner profile (background only; never overrides the ...tate-driven flow only when the learner asks to understand, derive, or be taught; never turn every turn into a lecture.'
+test_dependency_manifests.py::test_source_and_bundled_runtime_dependencies_match
+    FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/trainer_restore/wt/extension/bundled/server/pyproject.toml'
+test_epub_canonical.py::test_epub_becomes_canonical_markdown_with_tables_images_and_math
+    AssertionError: assert False
+test_event_ledger.py::TestNewEventConstants::test_total_event_type_count
+    AssertionError: assert 58 == 55
+test_event_ledger.py::TestNewEventTypeConstants::test_all_canonical_event_types_present
+    AssertionError: assert 58 == 55
+test_evidence_controls.py::test_fsrs_review_frequency_shortens_or_lengthens_interval
+    TypeError: FSRSTrainerCardScheduler.process_review() got an unexpected keyword argument 'review_frequency'
+test_formal_plan_commit_recovery.py::test_authorized_save_repairs_premature_final_once
+    AssertionError: assert 'control' == 'system'
+test_formal_plan_stage_constraints.py::test_formal_plan_cannot_silently_drop_an_invalid_stage
+    AssertionError: assert 'unknown_tool' == 'invalid_stages'
+test_formal_plan_stage_constraints.py::test_formal_plan_rejects_a_missing_explicitly_requested_stage
+    AssertionError: assert 'unknown_tool' == 'stage_count_mismatch'
+test_growth_loop_class_human_api.py::test_class_human_explicit_generate_in_turn_binds_new_plan_after_leftover
+    AssertionError: assert False is True
+test_growth_loop_class_human_api.py::test_class_human_explicit_generate_in_turn_stream_binds_new_plan_after_leftover
+    AssertionError: assert ''
+test_image_attachment_validation.py::test_request_total_uses_validated_bytes
+    AttributeError: 'module' object at app.core.models has no attribute 'MAX_TOTAL_IMAGE_BYTES'
+test_language_block_memory_persistence.py::test_camel_case_response_language_localizes_session_language_fallback
+    ImportError: cannot import name 'provider_recovery_resumed_next_step_text' from 'app.api.routers'
+test_language_block_memory_persistence.py::test_camel_case_response_language_localizes_turn_stream_language_fallback
+    ImportError: cannot import name 'provider_recovery_resumed_next_step_text' from 'app.api.routers'
+test_language_block_memory_persistence.py::test_english_response_keeps_provider_recovery_after_chinese_input_damage
+    ImportError: cannot import name 'provider_recovery_resumed_next_step_text' from 'app.api.routers'
+test_language_block_memory_persistence.py::test_provider_recovery_fallback_texts_render_in_chinese_for_empty_saved_thread_state
+    ImportError: cannot import name 'provider_recovery_resumed_next_step_text' from 'app.api.routers'
+test_language_block_memory_persistence.py::test_session_message_language_block_persists_recovery_context_into_memory
+    ImportError: cannot import name 'provider_recovery_resumed_next_step_text' from 'app.api.routers'
+test_language_block_memory_persistence.py::test_successful_provider_recovery_clears_stale_provider_context_for_a_new_turn
+    ImportError: cannot import name 'provider_recovery_resumed_next_step_text' from 'app.api.routers'
+test_language_integrity_guards.py::test_agentic_stream_defers_text_until_final_integrity_check
+    AssertionError: assert not [{'type': 'text', 'delta': 'First inspect the VS Code API boundary, then verify one real respon', 'safe_to_stream': True}]
+test_language_integrity_guards.py::test_server_and_bundled_sources_exclude_known_gbk_mojibake_residue
+    FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/trainer_restore/wt/extension/bundled/server/app/llm/prompts.py'
+test_language_integrity_guards.py::test_session_message_library_first_doc_question_skips_language_preflight
+    AssertionError: assert False
+test_leftover_training_card_identity.py::test_react_generate_training_card_denies_leftover_not_live
+    AssertionError: assert 'unknown_tool' in {'explicit_http_generate_card_required', 'leftover_not_live_card', 'live_training_card_required'}
+test_mcp_client.py::test_build_tools_registers_prefixed_names
+    AssertionError: assert None is not None
+test_md_only_migration_safety.py::test_migration_keeps_originals_behind_an_empty_canonical_markdown
+    AssertionError: assert False
+test_md_only_migration_safety.py::test_migration_keeps_the_only_copy_when_no_canonical_markdown_exists
+    AssertionError: assert False
+test_md_only_migration_safety.py::test_migration_removes_originals_only_behind_a_readable_canonical_markdown
+    AssertionError: assert False
+test_md_only_migration_safety.py::test_the_deletion_chokepoint_refuses_without_a_readable_document
+    AssertionError: assert None is not None
+test_next_step_surface_consistency.py::test_anchored_rescue_step_stays_consistent_without_a_labelled_action
+    AssertionError: assert '换一个证据来源，或者先把...turn.` 对应的问题。' == '先把 Python 的 ...很小的补丁目标，再继续写。'
+test_next_step_surface_consistency.py::test_repaired_finalize_step_drives_every_surface
+    AssertionError: assert '换一个证据来源，或者先把...turn.` 对应的问题。' == '跑通一个并发计时实验，确认总耗时小于顺序执行。'
+test_next_step_surface_consistency.py::test_streaming_turn_persists_the_repaired_step
+    AssertionError: {'scenario': 'general', 'focus_area': '', 'summary': '模型重复了相同的工具路径，但没有带来新的证据。 当前应该回到：我在学 Python 的 asyncio。 上一次还卡在：coac...ilable / This tool is not available for the current coaching turn.。', 'next_step': '换一个证据来源，或者先把问题收窄，再继续同样的工具路径。', ...}
+test_plan_formal_mutation.py::test_explicit_formal_plan_mutation_alias_generates_and_persists_a_plan
+    AssertionError: Expected mock to have been awaited once. Awaited 0 times.
+test_plan_formal_mutation.py::test_save_formal_plan_revises_existing_live_unfrozen_plan
+    AssertionError: {'ok': False, 'error': 'unknown_tool', 'detail': "Tool 'save_formal_plan' is not registered.", 'available': ['project_read', 'project_verify', 'library_read', 'library_write', 'library_exec', 'web_fetch', ...]}
+test_plan_formal_mutation.py::test_verified_web_sources_ground_a_complex_plan_that_survives_restart
+    AssertionError: assert False is True
+test_plan_runtime_pressure.py::test_bound_plan_resume_keeps_identity_when_reply_suggests_another_step
+    AttributeError: <module 'app.api.routers' from '/private/tmp/trainer_restore/wt/server/app/api/routers.py'> does not have the attribute 'extract_structured_plan_runtime_facts'
+test_plan_runtime_pressure.py::test_failed_resume_turn_does_not_write_structured_reply_facts
+    AttributeError: <module 'app.api.routers' from '/private/tmp/trainer_restore/wt/server/app/api/routers.py'> does not have the attribute 'extract_structured_plan_runtime_facts'
+test_plan_runtime_pressure.py::test_structured_finish_leaves_in_progress_and_persists_verify_method
+    AttributeError: <module 'app.api.routers' from '/private/tmp/trainer_restore/wt/server/app/api/routers.py'> does not have the attribute 'extract_structured_plan_runtime_facts'
+test_plan_runtime_pressure.py::test_turn_resume_structured_reply_facts_update_runtime_without_generating_plan
+    AttributeError: <module 'app.api.routers' from '/private/tmp/trainer_restore/wt/server/app/api/routers.py'> does not have the attribute 'extract_structured_plan_runtime_facts'
+test_practice_subject_routing.py::test_absent_subject_family_keeps_the_code_lane_unchanged
+    KeyError: 'status'
+test_practice_subject_routing.py::test_blocking_diagnostics_gate_every_family
+    KeyError: 'status'
+test_practice_subject_routing.py::test_failed_hook_is_needs_review_not_a_pass
+    KeyError: 'status'
+test_practice_subject_routing.py::test_hook_only_card_can_pass_on_deterministic_checks
+    KeyError: 'status'
+test_practice_subject_routing.py::test_host_declared_family_routes_to_the_literature_lane
+    AssertionError: assert False is True
+test_practice_subject_routing.py::test_literature_lane_never_mints_training_evidence
+    KeyError: 'passed'
+test_practice_subject_routing.py::test_literature_lane_without_declared_checks_needs_review
+    KeyError: 'status'
+test_practice_subject_routing.py::test_missing_rubric_anchor_fails_the_review
+    KeyError: 'status'
+test_practice_subject_routing.py::test_model_arguments_cannot_select_the_subject_family
+    KeyError: 'evidence_source'
+test_practice_subject_routing.py::test_rubric_alone_cannot_verify
+    KeyError: 'status'
+test_practice_subject_routing.py::test_unknown_subject_family_falls_back_to_the_code_lane
+    KeyError: 'status'
+test_proactive_budget.py::test_proactive_evaluate_endpoint_and_coach_weakness_diagnostic_cue
+    KeyError: 'diagnostic_weakness_hint'
+test_remote_141s_rap_workspace.py::test_remote_rap_session_library_import_and_project_isolation
+    AssertionError: assert False is True
+test_resource_agent_organization.py::test_class_human_api_organize_stamp_respects_host_trust_gate
+    KeyError: 'requires_confirmation'
+test_resource_agent_organization.py::test_import_resource_url_uses_runtime_post_index_closure
+    AttributeError: 'module' object at app.llm.tools has no attribute 'capture_source'
+test_resource_agent_organization.py::test_organize_cancel_during_fs_after_consume_fail_closed
+    KeyError: 'requires_confirmation'
+test_resource_agent_organization.py::test_organize_cancel_mid_fs_when_write_succeeds_completed_write_wins
+    KeyError: 'requires_confirmation'
+test_resource_agent_organization.py::test_organize_consume_then_fs_abort_restores_pending_fail_closed
+    KeyError: 'requires_confirmation'
+test_resource_agent_organization.py::test_organize_host_stamp_commits_on_trusted_local_managed_sandbox
+    AssertionError: assert False is True
+test_resource_agent_organization.py::test_organize_host_stamp_writes_local_library_when_project_is_remote
+    AssertionError: assert False is True
+test_resource_agent_organization.py::test_organize_host_stamp_writes_local_library_when_project_is_untrusted
+    AssertionError: assert False is True
+test_resource_agent_organization.py::test_organize_path_only_move_updates_matching_sandbox_record
+    KeyError: 'committed'
+test_resource_agent_organization.py::test_organize_resources_autonomous_library_turn_commits_without_host_stamp
+    AssertionError: assert False is True
+test_resource_agent_organization.py::test_organize_resources_can_resolve_resource_sandbox_path_and_update_record
+    KeyError: 'requires_confirmation'
+test_resource_agent_organization.py::test_organize_resources_cancel_clears_pending_and_stamp_fails_closed
+    KeyError: 'requires_confirmation'
+test_resource_agent_organization.py::test_organize_resources_cancel_while_confirm_in_flight_consume_fails_closed
+    KeyError: 'requires_confirmation'
+test_resource_agent_organization.py::test_organize_resources_commit_uses_reviewed_pending_operations
+    KeyError: 'requires_confirmation'
+test_resource_agent_organization.py::test_organize_resources_delete_is_confirmed_and_trash_restorable
+    KeyError: 'requires_confirmation'
+test_resource_agent_organization.py::test_organize_resources_is_proposal_first_and_supports_undo
+    AssertionError: assert False is True
+test_resource_agent_organization.py::test_organize_resources_rejects_host_stamp_without_pending_proposal
+    AssertionError: assert 'unknown_tool' == 'host_confirmation_required'
+test_resource_agent_organization.py::test_organize_resources_rejects_model_self_attested_confirmed
+    AssertionError: assert 'unknown_tool' == 'host_confirmation_required'
+test_resource_agent_url_import.py::test_delete_and_restore_resource_tools_use_reversible_trash
+    AssertionError: assert False is True
+test_resource_agent_url_import.py::test_import_resource_url_captures_markdown_and_returns_provenance
+    AttributeError: 'module' object at app.llm.tools has no attribute 'capture_source'
+test_resource_agent_url_import.py::test_import_resource_url_rejects_missing_and_invalid_urls_before_capture
+    AttributeError: 'module' object at app.llm.tools has no attribute 'capture_source'
+test_resource_agent_url_import.py::test_import_resource_url_returns_failed_index_facts_without_hiding_error
+    AttributeError: 'module' object at app.llm.tools has no attribute 'capture_source'
+test_resource_agent_url_import.py::test_import_resource_url_runs_from_an_ordinary_coach_turn
+    AttributeError: 'module' object at app.llm.tools has no attribute 'capture_source'
+test_resource_agent_url_import.py::test_resource_management_tools_are_always_visible
+    AssertionError: assert 'import_resource_url' in {'learning_action', 'learning_inspect', 'library_exec', 'library_read', 'library_write', 'project_read', ...}
+test_resource_channels_and_organize.py::test_path_only_organize_updates_search_and_does_not_resurrect
+    KeyError: 'committed'
+test_resource_message_parts.py::test_read_tool_result_carries_anchor_version_and_location
+    AssertionError: assert False is True
+test_resource_sidecar_routes.py::test_workspace_path_keeps_managed_artifacts_under_sidecar_data_root
+    AssertionError: assert '.csv' == '.md'
+test_resource_teaching_digest.py::test_digest_generates_four_assets_then_caches_by_content
+    AttributeError: 'StubProviderService' object has no attribute 'has_usable_credential'
+test_review_intervention.py::test_memory_service_persists_offer_refusal_and_engagement
+    AttributeError: 'MemoryService' object has no attribute 'review_intervention_budget'
+test_sandbox_library_agent.py::test_default_registry_exposes_sandbox_library_tools
+    AssertionError: assert False
+test_sandbox_library_agent.py::test_import_workspace_file_copies_remote_snapshot_into_local_library
+    AssertionError: assert False is True
+test_sandbox_library_agent.py::test_index_sandbox_file_registers_library_record_and_search_finds_it
+    AssertionError: assert False is True
+test_sandbox_library_agent.py::test_missing_snapshot_body_is_requested_then_importable_on_next_snapshot
+    AssertionError: assert 'unknown_tool' == 'snapshot_content_unavailable'
+test_sandbox_library_agent.py::test_sandbox_library_tools_write_read_and_never_touch_project
+    AssertionError: assert False is True
+test_sandbox_library_agent.py::test_workspace_tools_read_and_list_from_remote_snapshot
+    AssertionError: assert False is True
+test_sandbox_library_agent.py::test_write_sandbox_file_updates_existing_library_record
+    AssertionError: assert False is True
+test_session_agent_e2e.py::test_agent_can_read_workspace_file_via_real_tool_registry
+    AssertionError: assert False is True
+test_session_agent_e2e.py::test_agent_can_run_diagnostics_against_real_workspace_file
+    AssertionError: assert False is True
+test_session_agent_e2e.py::test_multi_turn_simulation_with_attachment_and_coach_finalize
+    AssertionError: assert 'completed' == 'coach_finalize'
+test_session_agent_e2e.py::test_session_message_auto_library_lookup_handles_mixed_language_doc_questions
+    AssertionError: assert 'library_read' == 'search_resources'
+test_session_agent_e2e.py::test_session_message_auto_library_lookup_is_visible_for_plain_chat
+    AssertionError: assert 'library_read' == 'search_resources'
+test_session_agent_e2e.py::test_session_message_auto_library_lookup_primes_agent_prompt
+    AssertionError: assert 'restate every step in order in the visible reply' in 'You are Trainer, a long-term learning coach inside VS Code.\n\nLearner profile (background only; never overrides the ...tation.\n- Ask one short follow-up only when the request is genuinely ambiguous or lacks information needed to answer.
+test_session_agent_e2e.py::test_session_message_preserves_auto_resource_evidence_when_agent_searches_again
+    AssertionError: assert 'library_read' == 'search_resources'
+test_session_agent_e2e.py::test_session_message_provider_override_infers_anthropic_tool_capabilities
+    AssertionError: assert False
+test_session_agent_e2e.py::test_session_message_publishes_one_coach_visible_status_for_multi_tool_turn
+    AssertionError: assert 'degraded' == 'done'
+test_session_agent_e2e.py::test_session_message_read_excerpt_surfaces_a_compact_citation
+    AssertionError: [{'type': 'coach_visible_status', 'status': 'degraded', 'summary': 'A deeper coach check degraded, so I kept the reply...}, {'type': 'citation', 'resourceId': 'resource-69f25f1cb7', 'label': 'Library match', 'title': 'queue-locks.md', ...}]
+test_session_agent_e2e.py::test_session_message_runs_agent_loop_and_returns_tool_events
+    AssertionError: assert 'degraded' == 'done'
+test_session_agent_e2e.py::test_session_message_stream_emits_agent_sse_events
+    AssertionError: assert 'degraded' == 'done'
+test_session_agent_e2e.py::test_session_message_stream_persists_agent_finalize_into_followup_memory
+    AssertionError: assert 'completed' == 'coach_finalize'
+test_session_agent_e2e.py::test_session_message_surfaces_agent_finalize_as_next_step_artifact
+    AssertionError: assert 'Close the loop' == 'We narrowed ...tor boundary.'
+test_session_agent_e2e.py::test_session_message_surfaces_practice_verification_as_coach_visible_status
+    AssertionError: assert 'degraded' == 'done'
+test_session_agent_e2e.py::test_session_message_surfaces_practice_verification_needs_review
+    KeyError: 'status'
+test_session_agent_e2e.py::test_session_message_two_library_reads_surface_two_compact_citations
+    AssertionError: assert set() == {'resource-c3...e-f4a22d0cbf'}
+test_session_request_dedup_honesty_stamps.py::test_session_message_dedup_cache_overlays_stamps_after_later_hydrate
+    AssertionError: completed_session_requests cache not found on /session/message
+test_session_request_inflight_singleflight.py::test_cross_route_stream_nonstream_waiter_honesty_overlay
+    AttributeError: <module 'app.api.routes.core' from '/private/tmp/trainer_restore/wt/server/app/api/routes/core.py'> does not have the attribute 'overlay_session_response_honesty_stamps'
+test_session_request_inflight_singleflight.py::test_cross_route_stream_waiter_gets_honesty_overlay_stamps
+    AttributeError: <module 'app.api.routes.core' from '/private/tmp/trainer_restore/wt/server/app/api/routes/core.py'> does not have the attribute 'overlay_session_response_honesty_stamps'
+test_session_request_inflight_singleflight.py::test_cross_route_waiter_gets_honesty_overlay_stamps
+    AttributeError: <module 'app.api.routes.core' from '/private/tmp/trainer_restore/wt/server/app/api/routes/core.py'> does not have the attribute 'overlay_session_response_honesty_stamps'
+test_session_request_inflight_singleflight.py::test_honest_unusable_provider_stream_abort_publishes_failure_complete_blocks_remint
+    AttributeError: <module 'app.api.coach_support' from '/private/tmp/trainer_restore/wt/server/app/api/coach_support.py'> does not have the attribute 'ChatMessage'
+test_session_request_inflight_singleflight.py::test_stream_waiter_error_path_emits_failure_complete_with_overlay_hook
+    AttributeError: <module 'app.api.routes.core' from '/private/tmp/trainer_restore/wt/server/app/api/routes/core.py'> does not have the attribute 'overlay_session_response_honesty_stamps'
+test_session_request_inflight_singleflight.py::test_stream_waiter_gets_honesty_overlay_stamps
+    AttributeError: <module 'app.api.routes.core' from '/private/tmp/trainer_restore/wt/server/app/api/routes/core.py'> does not have the attribute 'overlay_session_response_honesty_stamps'
+test_session_request_inflight_singleflight.py::test_turn_stream_waiter_gets_honesty_overlay_stamps
+    AttributeError: <module 'app.api.routes.core' from '/private/tmp/trainer_restore/wt/server/app/api/routes/core.py'> does not have the attribute 'overlay_session_response_honesty_stamps'
+test_session_request_inflight_singleflight.py::test_turn_waiter_gets_honesty_overlay_stamps
+    AttributeError: <module 'app.api.routes.core' from '/private/tmp/trainer_restore/wt/server/app/api/routes/core.py'> does not have the attribute 'overlay_session_response_honesty_stamps'
+test_smart_budget_and_rich_tools.py::test_academic_search_skills_curation_and_image_generation
+    AttributeError: 'NoneType' object has no attribute 'handler'
+test_smart_budget_and_rich_tools.py::test_tool_registry_exposes_all_new_tools_and_safety_classifications
+    AssertionError: assert False
+test_stage1_rethinkfun_truth_and_proxy.py::test_inspect_learning_truth_and_save_lecture_note_zero_code_repo_pollution
+    AssertionError: assert False is True
+test_stage1_rethinkfun_truth_and_proxy.py::test_rethinkfun_prompt_covers_minimal_lecture_and_reasoning_review
+    AssertionError: assert 'inspect_learning_truth' in "You are Trainer, a long-term learning coach inside VS Code.\n\nLearner profile (background only; never overrides the ...the learner explicitly asks to save the lecture into Resources, call `library_write(action='save_lecture_note', ...)`."
+test_stage1_rethinkfun_truth_and_proxy.py::test_save_lecture_note_schema_exposed_for_lecture_save_request_without_learning_note_flag
+    AssertionError: assert 'save_lecture_note' in ['project_read', 'project_verify', 'library_read', 'library_write', 'library_exec', 'web_fetch', ...]
+test_stream_agent_metadata.py::test_streamed_formal_save_with_automatic_resources_reports_actual_commit
+    AssertionError: assert 'save_formal_plan' in '{"tokens": 0, "response": {"reliability": {"phase": "acked", "outcome": "failure"}}, "stream_id": "stream_6cd8eafde5194c619c29fc3075a444c8", "reliability": {"phase": "acked", "outcome": "failure"}}'
+test_subject_profile_and_epub.py::test_deliverable_kind_routes_text_payload_to_rubric_pack
+    AssertionError: assert False is True
+test_task_tool_live_plan_gate.py::test_agent_loop_live_plan_tool_specify_succeeds
+    AssertionError: assert None is not None
+test_training_flow_integration.py::TestTrainingFlowErrorHandling::test_session_management
+    AssertionError: assert 'workspace-1' == 'workspace-2'
+test_training_return_feedback.py::test_completed_return_feedback_does_not_auto_execute_or_reopen_practice
+    AssertionError: assert None is not None
+test_turn_grounding.py::test_turn_downgrades_ungrounded_next_step
+    AssertionError: assert False is True
+test_turn_grounding.py::test_turn_keeps_grounded_next_step_untouched
+    AssertionError: assert '围绕 「grid[0]」...带回第一条实际输出或报错。' == '再对 `grid` 做一...验，确认两行打印互不影响。'
+test_visible_coach_response_sanitization.py::test_agentic_resume_thread_is_sanitized_across_visible_fields
+    AssertionError: assert 'Close the lo...un the check.' == 'We narrowed ...un the check.'
+test_visible_coach_response_sanitization.py::test_turn_language_corruption_override_catches_chinese_question_mark_reply
+    TypeError: 'NoneType' object is not subscriptable
+test_visible_coach_response_sanitization.py::test_turn_response_never_exposes_gbk_style_mojibake
+    AssertionError: assert '这次回答显示有问题' in '这条回复没有读清。请把刚才的问题再发一次。'
+test_workbench_snapshot_contract.py::test_workbench_snapshot_shared_contract_matches_server_model
+    AssertionError: WorkbenchSnapshot class not found in server/app/core/models.py
+test_workspace_recovery.py::test_advance_uses_structured_next_why_and_does_not_invent_from_prose
+    NameError: name 'extract_structured_next_step_runtime_facts' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_completed_stream_stays_completed_after_restart
+    NameError: name 'is_completed_streaming_checkpoint' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_failed_or_unverified_adopt_does_not_leave_waiting
+    NameError: name 'verified_adopt_allows_runtime_advance' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_formal_plan_old_why_does_not_win_over_advanced_runtime
+    NameError: name 'overlay_plan_runtime_display_facts' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_in_flight_stream_becomes_interrupted_after_restart_not_completed
+    NameError: name 'is_completed_streaming_checkpoint' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_incomplete_records_are_not_success
+    NameError: name 'is_authoritative_provider_capability_success' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_leftover_current_task_and_coach_chrome_not_live_when_recovered_step_empty
+    NameError: name 'prefer_recovered_coach_task_chrome' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_leftover_formal_card_title_does_not_live_in_current_task_focus_fallback
+    NameError: name 'live_training_focus_fallback' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_leftover_formal_plan_fields_do_not_live_in_overlay_fields
+    NameError: name 'overlay_plan_runtime_display_facts' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_leftover_formal_stage_does_not_paint_artifact_or_coach_stage_after_advance
+    NameError: name 'live_plan_artifact_stage_chrome' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_leftover_formal_task_goal_does_not_live_in_suggested_action_title
+    NameError: name 'live_task_next_action' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_leftover_formal_task_title_does_not_live_in_artifact_focus_area
+    NameError: name 'live_task_next_action' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_leftover_settings_profile_rhythm_and_sandbox_preview_stay_stored_not_live_when_step_empty
+    NameError: name 'prefer_recovered_settings_profile_rhythm' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_leftover_teaching_decision_and_learner_focus_not_live_when_recovered_step_empty
+    NameError: name 'leftover_training_focus_chrome_is_not_live' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_leftover_training_handoff_card_chrome_not_live_when_recovered_step_empty
+    NameError: name 'leftover_transfer_skill_has_real_multi_scene_proof' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_persist_does_not_backfill_empty_advanced_why_from_formal_plan
+    NameError: name 'live_runtime_frozen' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_provider_last_test_strips_secrets_and_survives_restart
+    NameError: name 'is_authoritative_provider_capability_success' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_structured_finish_leaves_in_progress_and_keeps_verify_method
+    NameError: name 'structured_plan_step_finished' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_structured_waiting_finish_enqueues_one_verify_evidence
+    NameError: name 'WAITING_VERIFY_EVIDENCE_SOURCE' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_verified_adopt_advances_to_structured_next_and_leaves_waiting
+    NameError: name 'verified_adopt_allows_runtime_advance' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_waiting_composer_evidence_uses_submitted_text_only
+    NameError: name 'WAITING_VERIFY_EVIDENCE_SOURCE' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_waiting_verify_evidence_uses_structured_method_only
+    NameError: name 'WAITING_VERIFY_EVIDENCE_SOURCE' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_workspace_switch_does_not_inherit_adopted_training_chrome
+    NameError: name 'normalize_training_chrome' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]
+test_workspace_recovery.py::test_workspace_switch_does_not_inherit_leftover_plan_or_resources
+    NameError: name 'formal_plan_identity_is_live' is not defined [module does not import at HEAD: 26 names gone from app.memory.workspace_recovery; probed with them trimmed]

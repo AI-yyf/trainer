@@ -7,7 +7,7 @@
     },
     "native_install_e2e": {
       "status": "PASS",
-      "evidence": "2026-11-22: macOS darwin-arm64 standalone trainer-sidecar rebuilt + verify:sidecar-runtime PASS + trainer-workspace-companion.vsix packaged (verified @c31e5f6 clean-HEAD VSIX 36/36 installed-host steps and re-verified on this release commit via package:vsix + verify-vsix-install + test:vsix-e2e). Visual window capture is win32-only and skipped on macOS."
+      "evidence": "2026-11-28: verify-vsix-e2e rebuilt the VSIX from the final tree (rebuiltCurrentVsix=true, trainer-extension-1.6.4-darwin-arm64.vsix) and passed 36/36 installed-host steps on macOS with the fixture provider. A separate cold-start probe (no learning folder bound) in the same installed VSIX showed: first-run sidebar offers '选择学习文件夹', Resources shows an empty library with only '导入资料', no library-folder write control and no error text; the learner's project folder stayed untouched and the sidecar data dir was under globalStorage. Visual window capture is win32-only and skipped on macOS."
     },
     "browser_e2e": {
       "status": "PASS_LOCAL",
@@ -39,7 +39,7 @@
     },
     "structural_teaching_journey": {
       "status": "PASS_STRUCTURAL_WITH_BLOCKED_REAL_MODEL",
-      "evidence": "real sidecar + SQLite: 14 PASS / 0 FAIL / 4 BLOCKED at d72e98b (real plan generate, real training card, real model switch, Remote-SSH). Blocked steps are provider/environment gates, not passes. evidence/journey-structural-d72e98b/summary.json"
+      "evidence": "real sidecar + SQLite: 14 PASS / 0 FAIL / 4 BLOCKED at d72e98b (real plan generate, real training card, real model switch, Remote-SSH). Blocked steps are provider/environment gates, not passes. evidence/journey-structural-d72e98b/summary.json | 2026-11-28: at HEAD the runner itself was stale: step 09-browser-pair called /browser/auto-pair with an unredeemed extension origin, which the 2026-11-27 bridge hardening answers with 403, and the runner exited 0 despite the FAIL (14 PASS / 4 BLOCKED / 1 FAIL). The runner now redeems a host-issued pair code and exits non-zero on any FAIL (verified with an injected failing step); result 18 PASS / 4 BLOCKED / 0 FAIL."
     },
     "real_model_journey": {
       "status": "PASS",
@@ -79,7 +79,7 @@
     },
     "local_e2e_full": {
       "status": "PASS",
-      "evidence": "2026-11-22: 93/93 core Playwright passed across trainer.spec.js, trainer-locales.spec.js, trainer-governance.spec.js, and trainer-settings-lifecycle.spec.js (earlier 111/111 full 12-spec run recorded at c31e5f6)."
+      "evidence": "2026-11-28: 105/105 Playwright passed on the webview preview (6 spec files, 1.8m) at HEAD 115ecd17 plus the hardening later committed to `main` on 2026-11-28. Supersedes the 93/93 record of 2026-11-22."
     },
     "real_vscode_training": {
       "status": "PASS",
@@ -99,7 +99,7 @@
     },
     "copy_vocabulary_gate": {
       "status": "PASS",
-      "evidence": "2026-11-22: npm run verify:copy-vocabulary PASS (68 files, 0 banned-term violations) + npm run verify:i18n PASS (213 appUiCopy + 212 settingsText + 272 hostCommandCopy call sites across 8 locales, 0 missing locales, 0 cross-script leaks, 0 stray host literals)"
+      "evidence": "2026-11-28: verify:copy-vocabulary PASS (53 files, 0 banned-term violations; the 68 of 2026-11-22 included 15 one-off i18n patch scripts since deleted) + verify:i18n PASS (194 appUiCopy, 196 settingsText, 273 hostCommandCopy call sites, 8 locales, 0 missing, 0 leaks)."
     },
     "calm_ui_geometry": {
       "status": "PASS",
@@ -110,20 +110,52 @@
       "evidence": "2026-11-22: npm run verify:local-latency PASS (5 actions 39ms-272ms, all within 1000ms)"
     },
     "stage2_coaching_latency_and_productivity": {
-      "status": "PASS",
-      "evidence": "2026-11-22: server/tests/test_turn_stream_latency_budget.py PASS; SSE status events (preparing_context/requesting_model/model_reasoning/tool_intent) and split response timings (local_prep_ms, provider_first_event_ms, visible_ttft_ms, total_ms) verified live; fenced-code streaming stall fixed; npm run verify:server-pyright 0 errors"
+      "status": "STALE",
+      "evidence": "2026-11-22: server/tests/test_turn_stream_latency_budget.py PASS; SSE status events (preparing_context/requesting_model/model_reasoning/tool_intent) and split response timings (local_prep_ms, provider_first_event_ms, visible_ttft_ms, total_ms) verified live; fenced-code streaming stall fixed; npm run verify:server-pyright 0 errors | 2026-11-28: the cited file server/tests/test_turn_stream_latency_budget.py was deleted in df0a3e2a and the '4205 passed' total describes a suite that no longer exists; not re-verified."
     },
     "stage3_proactive_budget": {
-      "status": "PASS",
-      "evidence": "58c02e0b: server/tests/test_proactive_budget.py (3 passed) + extension/tests/codingGapTracker.test.js (1 passed)"
+      "status": "STALE",
+      "evidence": "58c02e0b: server/tests/test_proactive_budget.py (3 passed) + extension/tests/codingGapTracker.test.js (1 passed) | 2026-11-28: the cited file server/tests/test_proactive_budget.py was deleted in df0a3e2a and the '4205 passed' total describes a suite that no longer exists; not re-verified."
     },
     "idempotency_story_deterministic": {
-      "status": "PASS",
-      "evidence": "2026-11-22: server/tests/test_stage1_rethinkfun_truth_and_proxy.py (11 passed) + full server pytest (-n 2) 4205 passed, 0 failed, 28 subtests passed; ruff 0 errors; npm run verify:server-pyright 0 errors"
+      "status": "STALE",
+      "evidence": "2026-11-22: server/tests/test_stage1_rethinkfun_truth_and_proxy.py (11 passed) + full server pytest (-n 2) 4205 passed, 0 failed, 28 subtests passed; ruff 0 errors; npm run verify:server-pyright 0 errors | 2026-11-28: the cited file server/tests/test_stage1_rethinkfun_truth_and_proxy.py was deleted in df0a3e2a and the '4205 passed' total describes a suite that no longer exists; not re-verified."
     },
     "live_model_idempotency_story": {
       "status": "PARTIAL",
       "evidence": "2026-11-22 live MiniMax-M2.7 4-case RethinkFun probe (zero keys/private endpoints stored): Case1 short Q&A TTFT 2615ms (totalTurnMs 3116ms, local_prep_ms 55ms, provider_first_event_ms 2526.2ms, visible_ttft_ms 2581.2ms), Case2 deep RethinkFun Attention lecture directly called save_lecture_note -> Trainer Library/学习讲稿/Scaled-Dot-Product-Attention：为什么要除以-sqrt(d_k).md (savedResourcesCount=1, libraryGroups=[{name:'学习讲稿',resource_count:1}], notePathCitedTruthfully=true), Case3 payments.py read-only guidance (paymentsCodeUntouched=true), Case4 inspect_learning_truth + reasoning review (planStageTitles=['基础','练习','整合'], attestMissingCardStatus=404, attestStatus=200 after save+start, goalNonPollutionCheck.unchangedByAuditQuery=true). All 4 cases completed=true, providerFallback=false, clicheHits=[], internalLeakHits=[], all_under_library_root=true, outside_library_root=[]. Remains PARTIAL because Case1 TTFT (2615ms) exceeds 2000ms target and Case4 had 1 parenthetical 'handoff' mention (jargonHits=['handoff'])."
+    },
+    "remeasurement_2026_11_28": {
+      "status": "MEASURED",
+      "evidence": "2026-11-28, HEAD 115ecd17 (clean tree) plus the hardening committed to `main` on 2026-11-28 (handoff.md, same date). Clean-tree baseline: ruff PASS; pyright 0 errors; npm run check PASS; verify:i18n PASS (194 appUiCopy / 196 settingsText / 273 hostCommandCopy call sites, 8 languages); verify:copy-vocabulary PASS (53 files); verify:credentials PASS (4743 files, 0 findings); server pytest 952 passed in 178.84s idle and 952 passed in 133.55s under concurrent load. One earlier full run stalled for more than 7.5 minutes inside test_browser_events_and_bootstrap under heavy machine load and did not reproduce in five further attempts; that test is now bounded (60s) and reports the producer task state. Playwright at HEAD: 104/105, the one failure being a stale per-model thinking-badge assertion (f4713414 replaced it with a provider-level slider). After hardening, test restoration and the two library fixes (reported path, cold-start pollution): server pytest 2736 passed in 212.26s (83 files; 952 at HEAD, 62 new regression tests written tonight, 1729 restored behavioral tests in 41 files); real-sidecar experience matrix 12/12 passed after the library-root change; pyright on server/app and on the 8 restored test files: 0 errors; npm run build exit 0 on the final tree; installed-VSIX E2E 36/36 with a VSIX rebuilt from the final tree (fixture provider); extension node:test 1446 passed, 0 failed, 0 skipped (158 files; 590 at HEAD-plus-tonight plus 856 restored behavioral tests in 129 files); Playwright 105 passed; pyright 0 errors; npm run build exit 0; bundled mirror identical. NOT re-measured tonight: real-model journeys, installed-VSIX E2E, Remote-SSH L2, sidecar experience matrix, GUI geometry/a11y. Every other gate in this file predates df0a3e2a (2026-11-25), which deleted 276 server test files (about 2,200 behavioral test functions), and the 8-primitive refactor."
+    },
+    "experience_gates_2026_11_28": {
+      "status": "PASS",
+      "evidence": "2026-11-28 on HEAD 115ecd17 plus the hardening later committed to `main` on 2026-11-28, webview preview layer: verify:local-latency PASS (5 navigation actions 40-382 ms, budget 1000 ms); verify:ui-geometry PASS (360 assertions at 340/420/460 px, dark/light, zh-CN/en-US); test:ui-a11y PASS (96/96 pages); test:structural-journey 18 PASS / 4 BLOCKED / 0 FAIL against a real sidecar and SQLite, the BLOCKED steps being the real-provider and Remote-SSH gates. Not measured tonight: first-visible-content and short-turn latency with a real model (contract §5 budgets), installed-VSIX GUI journeys."
+    },
+    "cold_start_zero_pollution_2026_11_28": {
+      "status": "PASS",
+      "evidence": "2026-11-28: at HEAD a cold-start workspace (no learning folder bound; the host keeps the sidecar data dir under globalStorage until one is chosen) resolved its library root to the learner's code project, so a library write with auto-index created Trainer Library/.trainer-resources/markdown/<id>.md inside the repository. Fixed (committed to `main` on 2026-11-28) by removing the workspace-path fallbacks in TrainerRuntime.resolve_library_carrier_root and ResourceService._canonical_writable_root. Regression tests: server/tests/test_library_zero_pollution.py (4 tests; the 3 cold-start cases fail on the HEAD implementation in a scratch export). Confirmed in the installed VSIX: project folder unchanged after opening Resources. The 409 library_root_unavailable answer and its new copy are API-level only on a cold start: the webview gates library writes on managed admission, and for JSON requests the host reports 'Sidecar request failed (409).' without reading detail.message."
+    },
+    "cold_start_import_message_2026_11_28": {
+      "status": "PASS",
+      "evidence": "2026-11-28, installed VSIX rebuilt from the final tree. On a cold-start workspace (no learning folder bound) the only write entry Resources offers is `导入资料`. At HEAD, clicking it answered with the webview's generic banner `资料没有完全导入。已导入的资料仍可使用；到“资料”页刷新后重试未完成的项目。`, because CommandRegistry.workspaceAdmissionGate blocks the command before it runs with the unmarked session-level reason (`Choose a Trainer workspace before starting a conversation.`), and the webview replaces unmarked host prose with generic recovery copy. After the fix the webview shows the marked, resource-oriented reason; the host message captured in the running VS Code was `[[trainer-resource-operation:upload:…]] [[trainer-resource-failure]] Choose how Trainer should work with this project before changing its resources.` and the learner's project folder was unchanged. Tests: extension/tests/commandRegistryAdmissionGate.test.js (5 tests; 3 fail on the HEAD registry) and one case in resourceCommands.test.js. Known limit: host copy follows the VS Code display language while the webview shell follows the OS locale on first run, so with an English VS Code on a Chinese system this one sentence is English; that is how every host message behaves and was not changed."
+    },
+    "test_restoration_2026_11_28": {
+      "status": "PASS",
+      "evidence": "2026-11-28: behavioral tests deleted in df0a3e2a were restored where they pass at HEAD unchanged. Server: 41 new files (8 + 29 + 4 restoring the canonical pipeline), 1729 collected tests; every test definition was compared with its original by AST (958 of 966 module-level definitions in the second batch identical, 22 up to Pydantic alias keywords; the 7 partially restored classes keep 44 methods, all verbatim); pyright 0 errors on all 37; no type-ignore, no skip markers. Extension: 129 new files, 856 tests; every file's header names its original; 81 files byte-identical, the rest differ only by a header, omitted tests listed with reasons, or an inlined replacement for the deleted loadTsModule helper. Not restored on purpose: server 994 old tests that pass but need manual type adaptation (824) or a type-ignore (132), 122 left out for the runtime budget, 17 carrying skip markers, 22 source or config guards, 189 failing at HEAD; extension 447 failing at HEAD (correction: the earlier figure of 109 counted only the omissions inside partially restored files), 79 passing text guards, 6 with t.skip, 30 not evaluated (10 spawn tsc, 20 packaging/e2e tooling). The HEAD-failure lists are kept, untriaged, under evidence/restored-tests-2026-11-28/; sampled entries are stale expectations for tools and exports renamed or removed since, but real behaviour changes may be among them. Two restored extension tests take data from source layout (a regex-extracted copy literal, a parsed type alias) and may report false failures after refactors."
+    },
+    "old_test_triage_2026_11_28": {
+      "status": "MEASURED",
+      "evidence": "2026-11-28: every old test that fails at HEAD was classified (stale API / intended change with commit / possible regression / environment), read-only, in scratch copies. Server 189: A 155, B 29, C 3, D 2. Extension 447: A 439, B 7, C 0, D 1. The 7 intended changes on the extension side each map to a commit (fb7cc6cd, 16d60e2b, 2431b0e7 x2, 1550b6fa, 656657a3 x2). Per-test lists were in /tmp/trainer-audit/triage_*.json (scratch; not preserved)."
+    },
+    "cold_start_canonical_markdown_2026_11_28": {
+      "status": "PASS",
+      "evidence": "2026-11-28: removing the workspace-folder fallback for <LibraryRoot> (zero-pollution fix) had a side effect the first verification missed: on a cold start an imported document no longer got its canonical Markdown (plain-text search hits, the binary itself synced into the sandbox), because the canonical root was None until a learning folder was bound. Found by classifying 12 old pipeline tests that pass at HEAD and failed only on the working tree. Fixed: on a cold start the canonical copy goes under the sidecar data root at <data_dir>/canonical-resources/<workspace slug>/ (managed_workspace_root in resources/canonical_store.py; the sandbox service resolves the same way; older copies inside the workspace folder are still found, read only); it moves with the inline uploads and the search index when a learning folder is bound, because the host copies the whole data folder (sidecarProcessManager.migrateManagedDataFolder). Tests: test_cold_start_canonical_markdown.py (5; 3 failed before the fix), test_library_write_path_truth.py (canonicalization now happens in both layouts), and 23 restored pipeline tests for docx/pptx/pdf/epub, anchors, images and migration safety."
+    },
+    "regressions_found_by_triage_2026_11_28": {
+      "status": "PASS",
+      "evidence": "2026-11-28: three behaviour fixes, each reproduced before and verified after. (1) The weakness recall cue (contract §7) was dropped whenever the turn used the minimal context tier, because the tier resolver reads only the message text and the cue was computed only outside that tier; the tier's own rule is that it is 'a prompt/IO reduction, never a behavior gate' (introduced by 0c41dbad). The cue is now computed in every tier; direct-answer mode still suppresses it (test_weakness_cue_survives_minimal_tier.py, 4 tests). (2) '讲解一下这个文件夹项目呢' in direct mode produced an implementation guide that treated the question as a feature to build, after 14b33b4a removed the broad explanation tokens that also gated the guide; project/folder-targeted explanation phrasings are recognised again, a plain explanation still does not request tools (test_exploratory_queries_never_forge_a_guide.py, 13 tests). (3) Two defects found while verifying: every implementation guide for a new learner named the internal placeholder 'current task' as the goal (the placeholder is no longer treated as a focus), and at committed HEAD a resource that already had its canonical Markdown could not be moved into a folder — POST /resource/organize set_group and the coach's organize tool answered 'Only local library snapshots can be grouped.' in both layouts, because grouping required the inline upload that the md-only pipeline removes; a group is now metadata (collection_path) for such a resource and a real move while the snapshot still exists (test_organize_canonicalized_resource.py, 6 tests; 2 failed before the fix)."
     }
   }
 }

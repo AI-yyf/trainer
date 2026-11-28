@@ -232,7 +232,7 @@ Para projetos em Linux/SSH remotos, o Trainer divide **cérebro local e mãos re
 | Mantém seu repo git intacto | ⚠️ mistura arquivos | ⚠️ | n/a | ✅ `<LibraryRoot>` único, zero escrita no repo |
 | Repetição espaçada FSRS | ❌ | ❌ | ✅ | ✅ com supressão em fluxo ativo |
 | Modelo de permissões | ❌ | ⚠️ Trust básico | ❌ | ✅ escada de 6 níveis + trava remota |
-| Suíte de testes aberta | fechada | fechada | fechada | ✅ **6.719 unit/integração + 480 E2E** |
+| Suíte de testes aberta | fechada | fechada | fechada | ✅ **4.182 unit/integração + 105 E2E** |
 | Internacionalização | ⚠️ | ⚠️ | ⚠️ | ✅ **8 idiomas** com gate automático em CI |
 
 > Outras ferramentas fazem você gerar código mais rápido; **o Trainer garante que você domine o que constrói.**
@@ -318,9 +318,9 @@ Para projetos em Linux/SSH remotos, o Trainer divide **cérebro local e mãos re
 |---|---|---|
 | `extension/src/` | Host VS Code: comandos, SecretStorage, WorkspaceGateway, SidecarProcessManager | `79` arquivos TS (~`53.286` linhas) |
 | `extension/webview/src/` | Workbench React: 2 destinos, gaveta, compositor único, Shiki/KaTeX/Mermaid, 8 idiomas | `233` TS/TSX + `53` CSS (~`120.507` linhas) |
-| `extension/tests/` | Suíte `node:test`: host, governança compartilhada, i18n, captura web, segurança | `324` arquivos · **`2.459` testes** |
+| `extension/tests/` | Suíte `node:test`: host, governança compartilhada, i18n, captura web, segurança | `158` arquivos · **`1.446` testes** |
 | `server/app/` | Sidecar FastAPI: agente ReAct, pedagogia RethinkFun, FSRS, ingestão, avaliador | `234` arquivos Python (~`178.520` linhas) |
-| `server/tests/` | Suíte backend `pytest` de rotas API, pedagogia, memória e protocolos | `300` arquivos · **`4.260` testes coletados** |
+| `server/tests/` | Suíte backend `pytest` de rotas API, pedagogia, memória e protocolos | `83` arquivos · **`2.736` testes coletados** |
 | `shared/src/` | Módulos TypeScript puros determinísticos compartilhados entre Host, Webview e Testes | `77` módulos (~`30.414` linhas · `523` exports) |
 | `remote-extension/src/` | Companion Remote-SSH (`extensionKind: ["workspace"]`) | `2` arquivos TS (`746` linhas) |
 | `browser-extension/` | Extensão Chromium MV3: popup, filas offline, menus de contexto e Side Panel | `9` arquivos (`7.245` linhas) |
@@ -349,13 +349,13 @@ Todas as rotas HTTP principais de estado retornam o objeto único **`WorkbenchSn
 
 | Portão | Escopo e resultado verificado | Comando |
 |---|---|---|
-| **Testes do servidor (`pytest`)** | **300 arquivos · 4.260 testes** (mais subtestes) | `npm run test:server` |
-| **Testes da extensão (`node:test`)** | **324 arquivos · 2.459 testes** (`2.458` aprovados, `1` skip condicional, `0` falhas) | `npm run test:extension` |
+| **Testes do servidor (`pytest`)** | **83 arquivos · 2.736 testes** (mais subtestes) | `npm run test:server` |
+| **Testes da extensão (`node:test`)** | **158 arquivos · 1.446 testes** (`1.446` aprovados, `0` skip condicional, `0` falhas) | `npm run test:extension` |
 | **Análise estática e tipos** | `ruff check` (`0`) · `pyright` (`0`) · CSS + `tsc -b` (`0`) | `npm run check && npm run verify:server-pyright` |
 | **Geometria de UI** | Soberanía do compositor único, 2 destinos, zero overflow (`340/420/460px`, dark/light, zh/en) | `npm run verify:ui-geometry` |
-| **Completude i18n** | **212** `appUiCopy` + **220** `settingsText` + **273** `hostCommandCopy` em **8 idiomas** (`0` faltas) | `npm run verify:i18n` |
-| **Vocabulário e segredos** | **68** arquivos UI limpos · **4.257** arquivos escaneados sem credenciais em texto claro | `npm run verify:copy-vocabulary && npm run verify:credentials` |
-| **Playwright E2E & Remote-SSH** | **33** specs Playwright (`480` casos) + matriz sidecar real + Ubuntu Remote-SSH L2 (`20/20`) | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
+| **Completude i18n** | **194** `appUiCopy` + **196** `settingsText` + **273** `hostCommandCopy` em **8 idiomas** (`0` faltas) | `npm run verify:i18n` |
+| **Vocabulário e segredos** | **53** arquivos UI limpos · **4.753** arquivos escaneados sem credenciais em texto claro | `npm run verify:copy-vocabulary && npm run verify:credentials` |
+| **Playwright E2E & Remote-SSH** | **6** specs Playwright (`105` casos) + matriz sidecar real + Ubuntu Remote-SSH L2 (`20/20`) | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
 | **Targets CI de release** | **3 plataformas desktop**: `win32-x64`, `darwin-arm64`, `linux-x64` | `.github/workflows/release.yml` |
 
 *(Nota: o aceite pedagógico humano `T-0028` permanece registrado como portão manual em [`docs/TRIAL-1.5.0-RC.md`](docs/TRIAL-1.5.0-RC.md).)*
@@ -407,6 +407,6 @@ Verificado automaticamente via `npm run verify:i18n` (`extension/webview/src/lib
 
 **// Treine sua IA · Cresça com sua IA**
 
-`v1.6.4` · Feito com café, FSRS, pedagogia RethinkFun State-Flow, 6.719 testes automatizados e um coach que se recusa a escrever código por você.
+`v1.6.4` · Feito com café, FSRS, pedagogia RethinkFun State-Flow, 4.287 testes automatizados e um coach que se recusa a escrever código por você.
 
 </div>

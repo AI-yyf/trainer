@@ -1,0 +1,2918 @@
+
+=== acceptanceFeedback.test.js  (pass 2/4)
+  ✗ parses training-acceptance check detail lines
+      parseAcceptanceFeedbackFromCheckDetail is not a function'
+      @ tests/acceptanceFeedback.test.js:48:1
+  ✗ returns null when the detail carries no acceptance breakdown
+      parseAcceptanceFeedbackFromCheckDetail is not a function'
+      @ tests/acceptanceFeedback.test.js:65:1
+
+=== autonomousTeacherAndUx.test.js  (pass 4/9)
+  ✗ autonomous workspace path forwarding, streaming composer queue, and settings fixes stay wired
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/autonomousTeacherAndUx.test.js:174:1
+  ✗ settings capabilities dirty-check, Finder resources tree, and learning step sanitizer stay intact
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/autonomousTeacherAndUx.test.js:276:1
+  ✗ all 43 registered backend tools have 8-locale TOOL_LABELS and UX settings/resources polish stays intact
+      Expected >= 43 tools, got 0'
+      expected: true
+      actual: false
+      @ tests/autonomousTeacherAndUx.test.js:301:1
+  ✗ shared training card, review queue, and coach bridge helpers return 8-locale non-English text
+      summarizeTrainingScenarioPack is not a function'
+      @ tests/autonomousTeacherAndUx.test.js:365:1
+  ✗ library folder rename/delete commands sync workbench resources and v1.6.3 UX guards hold
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/autonomousTeacherAndUx.test.js:398:1
+
+=== browserCaptureInstall.test.js  (pass 8/9)
+  ✗ the install command copies the bundled extension, opens the folder and shows the guide
+      -
+      '/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-browser-capture-Yx7PHE/sandboxed-install',
+      expected:
+      actual:
+      @ tests/browserCaptureInstall.test.js:263:1
+
+=== browserCaptureShared.test.js  (pass 75/76)
+  ✗ the popup connects by itself and pairs with a code only when Trainer asks for one
+      -
+      '\n' +
+      '/**\n' +
+      ' * Trainer Capture — popup.\n' +
+      ' *\n' +
+      ' * The background discovers the local sidecar and connects itself, so the card\n' +
+      ' * is capture-only — the capture row (page / PDF / GitHub repo), the optional\n' +
+      @ tests/browserCaptureShared.test.js:1418:1
+
+=== browserSidecar.test.js  (pass 0/62)
+  ✗ ensureBrowserPreviewSession keeps standalone Preview actions local
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:436:1
+  ✗ live browser Preview restores its same-tab session after a module reload
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:464:1
+  ✗ fixture Preview ignores stored live sessions while explicit live sessions keep precedence
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:518:1
+  ✗ live browser Preview continues when session storage is unavailable
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:563:1
+  ✗ fixture Preview turns a first Coach goal into a local starter plan and current task
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:617:1
+  ✗ fixture Preview keeps German metadata while using English fallback starter replies
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:717:1
+  ✗ fixture Preview turns Plan next-task turns into a current task without fabricating one before a plan exists
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:772:1
+  ✗ fixture Preview imports Resources in memory without contacting a sidecar
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:867:1
+  ✗ browser preview actions keep the goal, Plan, and Resources journey local and visible
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:947:1
+  ✗ browser preview training actions stay local across Learn, Try, Verify, Reflect, and Return
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:1047:1
+  ✗ browser preview can move through workspace admission states without touching a real folder
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:1191:1
+  ✗ streamBrowserPreviewMessage hides raw HTTP and SSE failure details
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:1318:1
+  ✗ browser preview keeps raw non-stream transport failures out of public errors
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:1390:1
+  ✗ browser preview replaces provider failure details and diagnostics with safe recovery copy
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:1435:1
+  ✗ browser preview turns upload HTML failures into safe recovery copy
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:1511:1
+  ✗ browser preview returns completed uploads when another file fails
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:1537:1
+  ✗ fetchBrowserPreviewBootstrap preserves structured sandbox preview data
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:1722:1
+  ✗ fetchBrowserPreviewBootstrap strips internal coach meta from visible surfaces
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:1786:1
+  ✗ fetchBrowserPreviewBootstrap maps authoritative workspace training state into preview bootstrap
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:1880:1
+  ✗ fetchBrowserPreviewBootstrap maps workspace understanding first-look summaries
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:1935:1
+  ✗ fetchBrowserPreviewBootstrap prefers browser preview bootstrap when present
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:2003:1
+  ✗ live browser Preview discovers the extension-managed sidecar port
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:2037:1
+  ✗ fetchBrowserPreviewBootstrap can force live bootstrap refresh even when browser preview bootstrap is present
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:2080:1
+  ✗ live browser Preview searches the real Sidecar and normalizes ranked hits
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:2143:1
+  ✗ fetchBrowserPreviewBootstrap aligns preview memory to the current response language before reading summary
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:2234:1
+  ✗ sendBrowserPreviewMessage preserves workspace training state in preview patches
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:2292:1
+  ✗ sendBrowserPreviewMessage keeps non-coach intents on /turn and forwards use_agent_loop
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:2373:1
+  ✗ sendBrowserPreviewMessage routes coach turns from plan view through /turn and forwards active_view
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:2416:1
+  ✗ sendBrowserPreviewMessage forwards the typed Resources composer intent without rewriting the message
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:2461:1
+  ✗ streamBrowserPreviewMessage uses the session stream route for coach turns
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:2514:1
+  ✗ streamBrowserPreviewMessage preserves the four-view sidecar request contract
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:2600:1
+  ✗ streamBrowserPreviewMessage parses CRLF-separated SSE chunks split across reads before completion
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:2695:1
+  ✗ streamBrowserPreviewMessage keeps one messageId across stream callbacks
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:2765:1
+  ✗ streamBrowserPreviewMessage reports reader failures with the active messageId
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:2825:1
+  ✗ streamBrowserPreviewMessage rejects EOF without completion and ignores events after an SSE error
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:2879:1
+  ✗ streamBrowserPreviewMessage routes coach turns from training view through /turn/stream and forwards active_view
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:2948:1
+  ✗ uploadBrowserPreviewResources keeps workspace training state during preview refresh
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3006:1
+  ✗ uploadBrowserPreviewResources sends live URL imports as network-enabled URL sources
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3082:1
+  ✗ uploadBrowserPreviewResources does not report a 200 response with failed indexing as indexed
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3165:1
+  ✗ fetchBrowserPreviewBootstrap uses the process-local preview provider key
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3238:1
+  ✗ fetchBrowserPreviewBootstrap drops preview last-test state when protocol identity changed
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3311:1
+  ✗ fetchBrowserPreviewBootstrap preserves remote, debug, and function coaching scenarios
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3366:1
+  ✗ sendBrowserPreviewMessage forwards the saved preview provider override and api key
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3411:1
+  ✗ saveBrowserPreviewProvider keeps the api key in process memory and clears legacy storage
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3488:1
+  ✗ saveBrowserPreviewProvider supplies the production default name when a complete draft leaves it blank
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3546:1
+  ✗ useBrowserPreviewProviderTemplate applies the selected label preset and keeps the Chinese next step visible
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3569:1
+  ✗ useBrowserPreviewProviderTemplate maps non-MiniMax labels to their preset
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3592:1
+  ✗ saveBrowserPreviewProvider updates an active profile label to the entered connection name
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3606:1
+  ✗ browser preview can find models, choose one, and save without a connection name
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3648:1
+  ✗ browser preview keeps draft model discovery scoped away from the saved connection
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3710:1
+  ✗ browser preview rejects policy-blocked provider saves before writing provider state
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3787:1
+  ✗ browser preview rejects profile switches that violate the target profile policy
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3829:1
+  ✗ fixture Preview switches a complete saved profile locally without contacting its endpoint
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3903:1
+  ✗ browser preview rejects restricted model switches before writing provider state
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:3971:1
+  ✗ switchBrowserPreviewProviderModel restores saved per-model limits in preview state
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:4009:1
+  ✗ switchBrowserPreviewProviderProfile auto-refreshes models and restores resolved-model limits when a preview key exists
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:4090:1
+  ✗ testBrowserPreviewProvider stores the last live result in preview state
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:4228:1
+  ✗ testBrowserPreviewProvider patches transient draft test state after a live success
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:4310:1
+  ✗ refreshBrowserPreviewProviderModels updates preview model cache and available models
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:4388:1
+  ✗ fixture Preview keeps provider testing and model refresh local
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:4455:1
+  ✗ fixture Preview discovers models for an incomplete draft without saving or replacing it
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:4524:1
+  ✗ browser preview only reuses a saved key for the same draft transport
+      -
+      expected: 'object'
+      actual: 'undefined'
+      @ tests/browserSidecar.test.js:4615:1
+
+=== coachOrientationGovernanceShared.test.js  (pass 0/6)
+  ✗ provider and sidecar facts beat plan or conversation theater
+      deriveCoachOrientation is not a function'
+      @ tests/coachOrientationGovernanceShared.test.js:11:1
+  ✗ training reliability and handoff drive the single primary action
+      deriveCoachOrientation is not a function'
+      @ tests/coachOrientationGovernanceShared.test.js:43:1
+  ✗ operation reliability keeps the rail working and leftover plan unpainted
+      deriveCoachOrientation is not a function'
+      @ tests/coachOrientationGovernanceShared.test.js:79:1
+  ✗ ready provider uses first-look next without inventing a plan
+      deriveCoachOrientation is not a function'
+      @ tests/coachOrientationGovernanceShared.test.js:106:1
+  ✗ incomplete records are not treated as current truth
+      deriveCoachOrientation is not a function'
+      @ tests/coachOrientationGovernanceShared.test.js:174:1
+  ✗ bound live plan without leftover card is the Coach current object
+      deriveCoachOrientation is not a function'
+      @ tests/coachOrientationGovernanceShared.test.js:190:1
+
+=== conversationCandidateGovernanceShared.test.js  (pass 0/1)
+  ✗ extension/tests/conversationCandidateGovernanceShared.test.js
+      test failed'
+      @ tests/conversationCandidateGovernanceShared.test.js:1:1
+
+=== docxPreviewSanitizerSource.test.js  (pass 7/8)
+  ✗ conversation file_preview paints via CoachMessageParts only (registry is HTML stub)
+      ENOENT: no such file or directory, open '/private/tmp/trainer-restore-run/shared/src/partsRendererRegistry.ts'"
+      @ tests/docxPreviewSanitizerSource.test.js:72:1
+
+=== errorSurfaceSanitizerShared.test.js  (pass 11/12)
+  ✗ plan candidate values stay explainable without dumping JSON or keys
+      describeSafeStructuredValue is not a function'
+      @ tests/errorSurfaceSanitizerShared.test.js:111:1
+
+=== errorSurfaceVisibleContract.test.js  (pass 2/3)
+  ✗ Plan candidate diff/impact never dump JSON or secrets
+      describeSafeStructuredValue is not a function'
+      @ tests/errorSurfaceVisibleContract.test.js:45:1
+
+=== leftoverColdStartRecoveredOverlaySource.test.js  (pass 1/3)
+  ✗ cold-start recovered stamp lights leftover overlay without leftover plan object
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/leftoverColdStartRecoveredOverlaySource.test.js:47:1
+  ✗ recovered true + matching live plan_id keeps leftover overlay off (source)
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/leftoverColdStartRecoveredOverlaySource.test.js:159:1
+
+=== masterPlanGovernanceShared.test.js  (pass 0/1)
+  ✗ extension/tests/masterPlanGovernanceShared.test.js
+      test failed'
+      @ tests/masterPlanGovernanceShared.test.js:1:1
+
+=== orientationLocale.test.js  (pass 1/4)
+  ✗ every orientation locale has complete coach, plan, and resources keys
+      coachOrientationCopy is not a function'
+      @ tests/orientationLocale.test.js:47:1
+  ✗ language switch keeps snapshot state and does not invent readiness
+      deriveCoachOrientation is not a function'
+      @ tests/orientationLocale.test.js:84:1
+  ✗ latin orientation locales do not keep Chinese as the only rail copy
+      deriveCoachOrientation is not a function'
+      @ tests/orientationLocale.test.js:142:1
+
+=== planGovernanceShared.test.js  (pass 0/1)
+  ✗ extension/tests/planGovernanceShared.test.js
+      test failed'
+      @ tests/planGovernanceShared.test.js:1:1
+
+=== planOrientationGovernanceShared.test.js  (pass 47/48)
+  ✗ leftover training handoff card chrome is not live when recovered current_step is empty
+      preferRecoveredSettingsProfileRhythm is not a function'
+      @ tests/planOrientationGovernanceShared.test.js:828:1
+
+=== previewAssets.test.js  (pass 0/1)
+  ✗ isPdfPreviewPath matches trimmed pdf paths only
+      isTabularPreviewPath is not a function'
+      @ tests/previewAssets.test.js:16:1
+
+=== projectLaneGovernanceShared.test.js  (pass 0/1)
+  ✗ extension/tests/projectLaneGovernanceShared.test.js
+      test failed'
+      @ tests/projectLaneGovernanceShared.test.js:1:1
+
+=== providerConnectionPaste.test.js  (pass 4/5)
+  ✗ settings form wires smart paste into both provider fields
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/providerConnectionPaste.test.js:84:1
+
+=== providerImageInputState.test.js  (pass 0/3)
+  ✗ provider image input is ready when vision is verified even if tools are off
+      providerSupportsImageInput is not a function'
+      @ tests/providerImageInputState.test.js:16:1
+  ✗ provider image input stays blocked when vision is only declared, not live-verified
+      providerSupportsImageInput is not a function'
+      @ tests/providerImageInputState.test.js:65:1
+  ✗ provider image input is ready for Gemini native inlineData after vision verification
+      providerSupportsImageInput is not a function'
+      @ tests/providerImageInputState.test.js:121:1
+
+=== providerModelPolicy.test.js  (pass 2/4)
+  ✗ pickDefaultModelFromList prefers fast tiers then alphabetical order
+      pickDefaultModelFromList is not a function'
+      @ tests/providerModelPolicy.test.js:51:1
+  ✗ pickFreshConnectionModel never overrides explicit or still-offered models
+      pickFreshConnectionModel is not a function'
+      @ tests/providerModelPolicy.test.js:63:1
+
+=== providerProfileDiagnostics.test.js  (pass 0/5)
+  ✗ describeProviderProfileDiagnostics reports a healthy OpenAI profile as ready
+      -
+      @ tests/providerProfileDiagnostics.test.js:16:1
+  ✗ describeProviderProfileDiagnostics flags missing structured output capability
+      -
+      @ tests/providerProfileDiagnostics.test.js:76:1
+  ✗ describeProviderProfileDiagnostics uses locale-appropriate detail separators
+      -
+      @ tests/providerProfileDiagnostics.test.js:138:1
+  ✗ describeProviderProfileDiagnostics applies model policy case-insensitively with deny precedence
+      -
+      @ tests/providerProfileDiagnostics.test.js:175:1
+  ✗ describeProviderProfileDiagnostics matches catalog models despite case and surrounding whitespace
+      -
+      @ tests/providerProfileDiagnostics.test.js:212:1
+
+=== providerQuota.test.js  (pass 8/9)
+  ✗ P0 redirect: quota exhaustion stays a hard-blocking category for real failures, while a historical quota test result is only a diagnostic warning
+      isCoachProviderBlockingCategory is not a function'
+      @ tests/providerQuota.test.js:21:1
+
+=== providerRestoreState.test.js  (pass 0/1)
+  ✗ extension/tests/providerRestoreState.test.js
+      test failed'
+      @ tests/providerRestoreState.test.js:1:1
+
+=== providerTestSource.test.js  (pass 3/4)
+  ✗ shared provider test copy keeps visible Chinese labels intact
+      -
+      '/**\n' +
+      ' * Provider Test Types\n' +
+      ' *\n' +
+      ' * Type definitions for provider live test API.\n' +
+      ' * Reference: docs/open-source-fit-and-provider-strategy.md §5.9\n' +
+      ' */\n' +
+      @ tests/providerTestSource.test.js:60:1
+
+=== providerThinkingWire.test.js  (pass 17/18)
+  ✗ unknown model shows the control, and probe verdicts still gate to unsupported
+      providerThinkingProbeObserved is not a function'
+      @ tests/providerThinkingWire.test.js:193:1
+
+=== remoteWorkspaceGateway.test.js  (pass 3/4)
+  ✗ remote workspace detection reads SSH authority and remoteName
+      detectRemoteWorkspaceType is not a function'
+      @ tests/remoteWorkspaceGateway.test.js:107:1
+
+=== resourceSearchTeachingSummaryExtra.test.js  (pass 1/2)
+  ✗ resource search modes only advertise executable search behavior
+      formatResourceSearchStatusSummary is not a function'
+      @ tests/resourceSearchTeachingSummaryExtra.test.js:71:1
+
+=== resourceWorkbenchGovernanceShared.test.js  (pass 0/3)
+  ✗ resource workbench keeps detail and sandbox mutually exclusive
+      resolveResourceWorkbenchGovernance is not a function'
+      @ tests/resourceWorkbenchGovernanceShared.test.js:10:1
+  ✗ resource workbench falls back to sandbox when detail cannot open
+      resolveResourceWorkbenchGovernance is not a function'
+      @ tests/resourceWorkbenchGovernanceShared.test.js:27:1
+  ✗ resource workbench falls back to list when no secondary surface is available
+      resolveResourceWorkbenchGovernance is not a function'
+      @ tests/resourceWorkbenchGovernanceShared.test.js:44:1
+
+=== reviewArtifactGovernanceShared.test.js  (pass 0/1)
+  ✗ extension/tests/reviewArtifactGovernanceShared.test.js
+      test failed'
+      @ tests/reviewArtifactGovernanceShared.test.js:1:1
+
+=== reviewQueueGovernanceShared.test.js  (pass 0/5)
+  ✗ prioritizeReviewQueueItems prefers due high-risk weakness items with low mastery
+      prioritizeReviewQueueItems is not a function'
+      @ tests/reviewQueueGovernanceShared.test.js:89:1
+  ✗ groupReviewQueueByFocusArea surfaces recovery-heavy focus groups first
+      prioritizeReviewQueueItems is not a function'
+      @ tests/reviewQueueGovernanceShared.test.js:97:1
+  ✗ summarizeReviewQueueItems and filterReviewQueueItems expose governance counts
+      prioritizeReviewQueueItems is not a function'
+      @ tests/reviewQueueGovernanceShared.test.js:108:1
+  ✗ resolveReviewQueueRecoveryCandidate recommends a focus batch when one weak area keeps resurfacing
+      prioritizeReviewQueueItems is not a function'
+      @ tests/reviewQueueGovernanceShared.test.js:137:1
+  ✗ summarizeReviewQueueTruth exposes FSRS-backed review truth for the current card flow
+      summarizeReviewQueueTruth is not a function'
+      @ tests/reviewQueueGovernanceShared.test.js:149:1
+
+=== sandboxNetworkCapabilityNarrativeShared.test.js  (pass 0/1)
+  ✗ extension/tests/sandboxNetworkCapabilityNarrativeShared.test.js
+      test failed'
+      @ tests/sandboxNetworkCapabilityNarrativeShared.test.js:1:1
+
+=== settingsCapabilityGovernanceShared.test.js  (pass 3/13)
+  ✗ verified plus observed live last-test can show ready
+      deriveSettingsCapabilityChips is not a function'
+      @ tests/settingsCapabilityGovernanceShared.test.js:48:1
+  ✗ declared-only evidence stays unverified and not ready
+      deriveSettingsCapabilityChips is not a function'
+      @ tests/settingsCapabilityGovernanceShared.test.js:80:1
+  ✗ missing last-test and mismatched scope stay unverified
+      deriveSettingsCapabilityChip is not a function'
+      @ tests/settingsCapabilityGovernanceShared.test.js:108:1
+  ✗ ready flags without observed evidence never become ready
+      deriveSettingsCapabilityChips is not a function'
+      @ tests/settingsCapabilityGovernanceShared.test.js:138:1
+  ✗ never-tested, failed, and unknown protocol hide chips and keep toolsReady false
+      deriveSettingsCapabilityChip is not a function'
+      @ tests/settingsCapabilityGovernanceShared.test.js:173:1
+  ✗ failed last-test after success does not keep leftover ready chips
+      deriveSettingsCapabilityChips is not a function'
+      @ tests/settingsCapabilityGovernanceShared.test.js:211:1
+  ✗ failed last-test and leftover verified evidence stay unverified and not ready
+      deriveSettingsCapabilityChips is not a function'
+      @ tests/settingsCapabilityGovernanceShared.test.js:239:1
+  ✗ unknown last-test protocol never allows chips
+      deriveSettingsCapabilityChip is not a function'
+      @ tests/settingsCapabilityGovernanceShared.test.js:273:1
+  ✗ chat-ok but stream-unverified is not streamingReady
+      deriveSettingsCapabilityChip is not a function'
+      @ tests/settingsCapabilityGovernanceShared.test.js:301:1
+  ✗ saved capability picks cannot paint ready chips without verified last-test
+      deriveSettingsCapabilityChips is not a function'
+      @ tests/settingsCapabilityGovernanceShared.test.js:317:1
+
+=== smartTokenBudgetAndVisuals.test.js  (pass 2/3)
+  ✗ skillCatalog exposes $image and $organize skills and webview CSP allows inline visuals
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/smartTokenBudgetAndVisuals.test.js:69:1
+
+=== suggestedActionGovernanceShared.test.js  (pass 0/1)
+  ✗ extension/tests/suggestedActionGovernanceShared.test.js
+      test failed'
+      @ tests/suggestedActionGovernanceShared.test.js:1:1
+
+=== trainingCardCopyShared.test.js  (pass 5/12)
+  ✗ summarizeTrainingCardLead compresses long zh practice descriptions for first screen
+      summarizeTrainingCardLead is not a function'
+      @ tests/trainingCardCopyShared.test.js:26:1
+  ✗ compactTrainingCardList deduplicates and clamps practice contract items
+      compactTrainingCardList is not a function'
+      @ tests/trainingCardCopyShared.test.js:48:1
+  ✗ summarizePlanCandidateReason keeps plan candidate notes compact and learner-readable
+      summarizePlanCandidateReason is not a function'
+      @ tests/trainingCardCopyShared.test.js:117:1
+  ✗ summarizeTrainingNextHopCopy aligns title and detail for zh narrow sidebars
+      summarizeTrainingNextHopCopy is not a function'
+      @ tests/trainingCardCopyShared.test.js:128:1
+  ✗ summarizeWaitingCoachJudgment returns one compact waiting summary
+      summarizeWaitingCoachJudgment is not a function'
+      @ tests/trainingCardCopyShared.test.js:141:1
+  ✗ summarizeTrainingScenarioPack keeps guided teaching families readable
+      summarizeTrainingScenarioPack is not a function'
+      @ tests/trainingCardCopyShared.test.js:151:1
+  ✗ training card copy source keeps zh labels free of private-use mojibake
+      -
+      'import type { ComposerLanguage } from "./types";\r\n' +
+      '\r\n' +
+      '// Re-export ComposerLanguage with domain-specific aliases for type safety\r\n' +
+      'export type TrainingCardCopyLanguage = ComposerLanguage;\r\n' +
+      'export type NarrowSidebarCopyLanguage = ComposerLanguage;\r\n' +
+      '\r\n' +
+      @ tests/trainingCardCopyShared.test.js:162:1
+
+=== trainingCardRoutingShared.test.js  (pass 0/6)
+  ✗ buildTrainingCardRouting selects the highest eligible active card with explanation
+      buildTrainingCardRouting is not a function'
+      @ tests/trainingCardRoutingShared.test.js:38:1
+  ✗ buildTrainingCardRouting keeps the current deck authoritative when it has eligible cards
+      buildTrainingCardRouting is not a function'
+      @ tests/trainingCardRoutingShared.test.js:78:1
+  ✗ buildTrainingCardRouting blocks unsafe or incomplete candidates before scoring
+      buildTrainingCardRouting is not a function'
+      @ tests/trainingCardRoutingShared.test.js:129:1
+  ✗ buildTrainingCardRouting respects pure conversation mode and does not force training
+      buildTrainingCardRouting is not a function'
+      @ tests/trainingCardRoutingShared.test.js:183:1
+  ✗ buildTrainingCardRouting exposes stale resource blockers
+      buildTrainingCardRouting is not a function'
+      @ tests/trainingCardRoutingShared.test.js:195:1
+  ✗ buildTrainingCardRouting lets repeated weakness priority break otherwise close card ties
+      buildTrainingCardRouting is not a function'
+      @ tests/trainingCardRoutingShared.test.js:233:1
+
+=== trainingComposerNextHopPhaseSource.test.js  (pass 0/2)
+  ✗ next-hop-only reflection and return reuse the execution phase that drives the training composer
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingComposerNextHopPhaseSource.test.js:19:1
+  ✗ reflection and return phases keep their dedicated placeholder and persistence barrier
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingComposerNextHopPhaseSource.test.js:44:1
+
+=== trainingHandoffGovernanceShared.test.js  (pass 0/15)
+  ✗ localizeTrainingNextHopLabel covers structured next-hop labels in every supported language
+      resolveTrainingNextHop is not a function'
+      @ tests/trainingHandoffGovernanceShared.test.js:12:1
+  ✗ localizeTrainingNextHopLabel keeps pending training states clear in every supported language
+      resolveTrainingNextHop is not a function'
+      @ tests/trainingHandoffGovernanceShared.test.js:42:1
+  ✗ resolveTrainingHandoff surfaces the same training card accepted from conversation
+      resolveTrainingHandoff is not a function'
+      @ tests/trainingHandoffGovernanceShared.test.js:70:1
+  ✗ resolveTrainingHandoff explains blocked same-turn candidates when routing pauses them
+      resolveTrainingHandoff is not a function'
+      @ tests/trainingHandoffGovernanceShared.test.js:130:1
+  ✗ resolveTrainingHandoff prefers the explicitly returned card over the newly routed next card
+      resolveTrainingHandoff is not a function'
+      @ tests/trainingHandoffGovernanceShared.test.js:175:1
+  ✗ resolveTrainingHandoff ledger fallback still prefers explicit selected card identity
+      resolveTrainingHandoff is not a function'
+      @ tests/trainingHandoffGovernanceShared.test.js:228:1
+  ✗ resolveTrainingHandoff marks resource-risk blocked cards as paused
+      resolveTrainingHandoff is not a function'
+      @ tests/trainingHandoffGovernanceShared.test.js:267:1
+  ✗ resolveTrainingNextHop surfaces governed evidence candidates that can continue into plan
+      resolveTrainingNextHop is not a function'
+      @ tests/trainingHandoffGovernanceShared.test.js:306:1
+  ✗ resolveTrainingNextHop marks accepted and archived next hops as no longer continuable
+      resolveTrainingNextHop is not a function'
+      @ tests/trainingHandoffGovernanceShared.test.js:338:1
+  ✗ resolveTrainingNextHop stays hidden when no explicit next-hop object exists
+      resolveTrainingNextHop is not a function'
+      @ tests/trainingHandoffGovernanceShared.test.js:366:1
+  ✗ resolveTrainingNextHop stays hidden when only fallback copy exists without structured next-hop authority
+      resolveTrainingNextHop is not a function'
+      @ tests/trainingHandoffGovernanceShared.test.js:377:1
+  ✗ resolveTrainingNextHop keeps zh next-hop explanation compact and localized
+      resolveTrainingNextHop is not a function'
+      @ tests/trainingHandoffGovernanceShared.test.js:393:1
+  ✗ resolveTrainingNextHop still renders structured installed-state truth when only structured next-hop authority exists
+      resolveTrainingNextHop is not a function'
+      @ tests/trainingHandoffGovernanceShared.test.js:414:1
+  ✗ resolveTrainingNextHop keeps successful practice returns pointed back to coach
+      resolveTrainingNextHop is not a function'
+      @ tests/trainingHandoffGovernanceShared.test.js:439:1
+  ✗ resolveTrainingNextHop falls back to training_next_hop_materialized ledger when latestTrainingNextHop is missing
+      resolveTrainingNextHop is not a function'
+      @ tests/trainingHandoffGovernanceShared.test.js:465:1
+
+=== trainingRecoveryGovernanceShared.test.js  (pass 0/1)
+  ✗ extension/tests/trainingRecoveryGovernanceShared.test.js
+      test failed'
+      @ tests/trainingRecoveryGovernanceShared.test.js:1:1
+
+=== trainingReliabilityGovernanceShared.test.js  (pass 0/1)
+  ✗ extension/tests/trainingReliabilityGovernanceShared.test.js
+      test failed'
+      @ tests/trainingReliabilityGovernanceShared.test.js:1:1
+
+=== transferEvidenceGovernanceShared.test.js  (pass 0/1)
+  ✗ extension/tests/transferEvidenceGovernanceShared.test.js
+      test failed'
+      @ tests/transferEvidenceGovernanceShared.test.js:1:1
+
+=== transferSkillGovernanceShared.test.js  (pass 2/6)
+  ✗ single scene and same-workspace cards do not promote
+      shouldPromoteTransferableSkill is not a function'
+      @ tests/transferSkillGovernanceShared.test.js:14:1
+  ✗ second workspace can promote; same-workspace leftover scene cannot
+      shouldPromoteTransferableSkill is not a function'
+      @ tests/transferSkillGovernanceShared.test.js:36:1
+  ✗ bare transfer ids without evidence stay fail-closed
+      resolveSkillSceneKey is not a function'
+      @ tests/transferSkillGovernanceShared.test.js:65:1
+  ✗ copy never claims global mastery from one scene
+      buildTransferSkillStateRecord is not a function'
+      @ tests/transferSkillGovernanceShared.test.js:86:1
+
+=== typedMessagePartsShared.test.js  (pass 0/1)
+  ✗ trainer message parts normalize into the typed registry contract
+      -
+      expected:
+      @ tests/typedMessagePartsShared.test.js:16:1
+
+=== workspaceRecoveryGovernanceShared.test.js  (pass 8/40)
+  ✗ declared capability is not treated as a live last-test success surface
+      isAuthoritativeProviderCapabilitySuccess is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:154:1
+  ✗ in-flight stream recovers as interrupted, never completed
+      isCompletedStreamingCheckpoint is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:194:1
+  ✗ completed stream stays completed after restart
+      isCompletedStreamingCheckpoint is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:206:1
+  ✗ incomplete leftover affectState is not current truth
+      normalizeAffectStateIdentity is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:216:1
+  ✗ workspace switch drops leftover affectState as current
+      selectAffectStateForScope is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:229:1
+  ✗ incomplete leftover toneDecision is not current truth
+      normalizeToneDecisionIdentity is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:243:1
+  ✗ incomplete leftover adaptation guide is not current truth
+      normalizeAdaptationGuideIdentity is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:256:1
+  ✗ workspace switch drops leftover adaptation guide as current
+      selectAdaptationGuideForScope is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:269:1
+  ✗ incomplete leftover principle notes are not current truth
+      normalizePrincipleNotesIdentity is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:282:1
+  ✗ workspace switch drops leftover principle notes as current
+      selectPrincipleNotesForScope is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:295:1
+  ✗ incomplete leftover project sources are not current truth
+      normalizeProjectSourceIdentity is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:309:1
+  ✗ workspace switch drops leftover project sources as current
+      selectProjectSourcesForScope is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:326:1
+  ✗ workspace switch drops leftover toneDecision as current
+      selectToneDecisionForScope is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:338:1
+  ✗ incomplete leftover evaluation chrome is not current truth
+      normalizeEvaluationIdentity is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:353:1
+  ✗ workspace switch drops leftover evaluation as current
+      selectEvaluationForScope is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:366:1
+  ✗ incomplete leftover learnerState is not current truth
+      normalizeLearnerStateIdentity is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:380:1
+  ✗ workspace switch drops leftover learnerState as current
+      selectLearnerStateForScope is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:393:1
+  ✗ incomplete leftover teachingDecision is not current truth
+      normalizeTeachingDecisionIdentity is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:406:1
+  ✗ workspace switch drops leftover teachingDecision as current
+      selectTeachingDecisionForScope is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:419:1
+  ✗ incomplete leftover coaching focus is not current truth
+      normalizeCoachingFocusIdentity is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:434:1
+  ✗ incomplete leftover coachFocus is not current truth
+      normalizeCoachFocusIdentity is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:447:1
+  ✗ workspace switch drops leftover coachFocus as current
+      selectCoachFocusForScope is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:464:1
+  ✗ incomplete leftover coachTurn is not current truth
+      normalizeCoachTurnIdentity is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:486:1
+  ✗ incomplete leftover nextStepHint is not current truth
+      nextStepHintIdentityIsLive is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:503:1
+  ✗ incomplete leftover coachingAdaptation is not current truth
+      coachingAdaptationIdentityIsLive is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:538:1
+  ✗ workspace switch drops leftover coachTurn as current
+      selectCoachTurnForScope is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:574:1
+  ✗ workspace switch drops leftover coaching focus as current
+      selectCoachingFocusForScope is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:588:1
+  ✗ incomplete leftover task identity is not current truth
+      normalizeCurrentTaskIdentity is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:603:1
+  ✗ workspace switch drops leftover current_task as current
+      selectCurrentTaskForScope is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:616:1
+  ✗ incomplete leftover plan identity is not current truth
+      selectFormalPlanForScope is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:630:1
+  ✗ workspace switch drops leftover plan identity and resources as current
+      selectFormalPlanForScope is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:643:1
+  ✗ workspace switch drops previous plan, last-test, and stream as current
+      selectTrainingRecordForScope is not a function'
+      @ tests/workspaceRecoveryGovernanceShared.test.js:688:1
+
+=== workspaceTrustStateParity.test.js  (pass 15/17)
+  ✗ host turn/session/message sends workspace_trusted + remote_name (never JSON-omit)
+      -
+      '    const workspaceFileSnapshot = await buildWorkspaceFileSnapshot(context);\n' +
+      '    const requestBody = {\n' +
+      '      session_id: context.getSessionId(),\n' +
+      '      stream_id: messageId,\n' +
+      '      formal_plan_mutation: streamPayload.formalPlanMutation === true,\n' +
+      '      // Host-armed only — ignore any webview self-attestation.\n' +
+      @ tests/workspaceTrustStateParity.test.js:211:1
+  ✗ Settings first screen paints live trust sentence, not leftover sandbox chrome
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/workspaceTrustStateParity.test.js:298:1
+
+=== appOperationStatusSource.test.js  (pass 2/3)
+  ✗ live-plan task mint 409 markers map to local copy and keep composer draft until ack
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/appOperationStatusSource.test.js:108:1
+
+=== attestationUndeliveredSurfaceSource.test.js  (pass 2/3)
+  ✗ App host-status interception scopes the undelivered marker to Training
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/attestationUndeliveredSurfaceSource.test.js:75:1
+
+=== browserPreviewDefaultFixtureSource.test.js  (pass 3/4)
+  ✗ live preview never becomes a fixture after sidecar bootstrap injects state
+      -
+      'import { normalizeCoachOrientationRecord } from "../../../../shared/src/coachOrientationGovernance";\n' +
+      'import {\n' +
+      '  createEmptyTrainerStreamingState,\n' +
+      '  normalizeNextStepHint,\n' +
+      '  normalizeTrainerMessageParts,\n' +
+      '} from "../../../../shared/src/protocol";\n' +
+      @ tests/browserPreviewDefaultFixtureSource.test.js:23:1
+
+=== browserPreviewEnvironmentSource.test.js  (pass 0/4)
+  ✗ browser preview detection honors the preview flag even when the VS Code shim exists
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/browserPreviewEnvironmentSource.test.js:44:1
+  ✗ production workbench does not treat mockData or browserSidecar fixtures as host truth
+      -
+      'import { normalizeCoachOrientationRecord } from "../../../../shared/src/coachOrientationGovernance";\n' +
+      'import {\n' +
+      '  createEmptyTrainerStreamingState,\n' +
+      '  normalizeNextStepHint,\n' +
+      '  normalizeTrainerMessageParts,\n' +
+      '} from "../../../../shared/src/protocol";\n' +
+      @ tests/browserPreviewEnvironmentSource.test.js:53:1
+  ✗ browserSidecar protocol defaults stay fail-closed for VS Code webview
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/browserPreviewEnvironmentSource.test.js:67:1
+  ✗ browser preview language URL overrides are applied once and choice buttons use one click path
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/browserPreviewEnvironmentSource.test.js:88:1
+
+=== browserPreviewHarnessSource.test.js  (pass 37/40)
+  ✗ browser preview resolves resource training handoffs from durable real training results
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/browserPreviewHarnessSource.test.js:119:1
+  ✗ browser preview keeps VS Code-only live-follow sync silent
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/browserPreviewHarnessSource.test.js:321:1
+  ✗ browser preview protects restored provider strings and localizes transient preview states
+      -
+      'import { trainerCommands } from "../../../../shared/src/commands";\n' +
+      'import { waitingComposerEnqueueFailureText } from "../../../../shared/src/errorSurfaceSanitizer";\n' +
+      'import { stripProviderSnapshotSecrets } from "../../../../shared/src/hostLastTestGovernance";\n' +
+      'import { SUPPORTED_LANGUAGES } from "../../../../shared/src/types";\n' +
+      'import {\n' +
+      '  runBrowserPreviewAction,\n' +
+      @ tests/browserPreviewHarnessSource.test.js:617:1
+
+=== browserPreviewUploadStatusSource.test.js  (pass 0/1)
+  ✗ browser preview reports partial resource uploads without presenting them as full success
+      expected browser upload handler'
+      expected: true
+      actual: false
+      @ tests/browserPreviewUploadStatusSource.test.js:20:1
+
+=== candidateManagement.test.js  (pass 2/3)
+  ✗ the candidate card discloses one management surface
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/candidateManagement.test.js:62:1
+
+=== coachConversationSource.test.js  (pass 20/32)
+  ✗ coach streaming lane exposes trainer agent activity
+      expected CoachConversationView render'
+      expected: true
+      actual: false
+      @ tests/coachConversationSource.test.js:90:1
+  ✗ coach summary rail surfaces blocker guidance alongside the live thread
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/coachConversationSource.test.js:140:1
+  ✗ coach visible status renders an explicit recovery resume line
+      -
+      'import {\n' +
+      '  sanitizeErrorSurface,\n' +
+      '  sanitizeErrorSurfaceText,\n' +
+      '} from "../../../../../shared/src/errorSurfaceSanitizer";\n' +
+      'import { isDocxPreviewPath } from "../../../../../shared/src/previewAssets";\n' +
+      'import {\n' +
+      @ tests/coachConversationSource.test.js:251:1
+  ✗ docked views retain a compact Coach context rail without docking the full transcript
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/coachConversationSource.test.js:324:1
+  ✗ formal Plan generation requires a current verified tools probe, not declared capability flags
+      expected formal Plan capability gate'
+      expected: true
+      actual: false
+      @ tests/coachConversationSource.test.js:372:1
+  ✗ Plan next-step copy prefers the live current step before stale artifact teasers
+      expected the shared Learning facts producer'
+      expected: true
+      actual: false
+      @ tests/coachConversationSource.test.js:438:1
+  ✗ Coach shows the welcome with its bottom composer available
+      -
+      ''
+      expected:
+      actual: ''
+      @ tests/coachConversationSource.test.js:475:1
+  ✗ Coach first-run state starts from the learner goal before optional code context
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/coachConversationSource.test.js:483:1
+  ✗ Training review entry uses shared localized copy and hides mismatched review prose
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/coachConversationSource.test.js:497:1
+  ✗ Composer candidate decks keep Codex-style draft ownership and keyboard dismissal
+      -
+      ''
+      expected:
+      actual: ''
+      @ tests/coachConversationSource.test.js:519:1
+  ✗ hint suggested action fills the composer and does not mint a task turn
+      expected handleSuggestedAction before handleSubmit'
+      expected: true
+      actual: false
+      @ tests/coachConversationSource.test.js:638:1
+  ✗ handleSuggestedAction prefills task, next_task, and review drafts without sendTurn when leftover is not live
+      expected leftoverSuggestedActionNotLive before handleSubmit'
+      expected: true
+      actual: false
+      @ tests/coachConversationSource.test.js:654:1
+
+=== coachFinalizeNextStepContract.test.js  (pass 1/7)
+  ✗ coach_finalize next_step schema demands an evidence-extracted concrete move
+      -
+      'from __future__ import annotations\n' +
+      '\n' +
+      'import logging\n' +
+      'from collections.abc import Iterable\n' +
+      '\n' +
+      'from .tool_handlers.organization_and_sandbox import (\n' +
+      @ tests/coachFinalizeNextStepContract.test.js:35:1
+  ✗ finalize prompt forbids goal restatement and generic filler in next_step
+      -
+      'from __future__ import annotations\n' +
+      '\n' +
+      'from .prompt_domains.messages_and_turn_signals import (\n' +
+      '    _build_learner_context_block as _build_learner_context_block,\n' +
+      ')\n' +
+      'from .prompt_domains.messages_and_turn_signals import (\n' +
+      @ tests/coachFinalizeNextStepContract.test.js:44:1
+  ✗ fresh workspaces get no fabricated imperative coaching focus
+      -
+      '"""Sidecar FastAPI router assembly.\n' +
+      '\n' +
+      'Composes cohesive domain services from ``router_domains`` and mounts ``core``\n' +
+      'ahead of the domain sub-routers so overlapping paths keep their historical\n' +
+      'match precedence.\n' +
+      '"""\n' +
+      @ tests/coachFinalizeNextStepContract.test.js:54:1
+  ✗ router repairs generic or pasted-prose next_step from the reply labelled action
+      -
+      '"""Sidecar FastAPI router assembly.\n' +
+      '\n' +
+      'Composes cohesive domain services from ``router_domains`` and mounts ``core``\n' +
+      'ahead of the domain sub-routers so overlapping paths keep their historical\n' +
+      'match precedence.\n' +
+      '"""\n' +
+      @ tests/coachFinalizeNextStepContract.test.js:65:1
+  ✗ T-0035/T-0036: repair rebuilds resume_thread and keeps short CJK steps
+      -
+      '"""Sidecar FastAPI router assembly.\n' +
+      '\n' +
+      'Composes cohesive domain services from ``router_domains`` and mounts ``core``\n' +
+      'ahead of the domain sub-routers so overlapping paths keep their historical\n' +
+      'match precedence.\n' +
+      '"""\n' +
+      @ tests/coachFinalizeNextStepContract.test.js:105:1
+  ✗ T-0033: stream setup failures resolve the singleflight owner future
+      -
+      '"""Sidecar FastAPI router assembly.\n' +
+      '\n' +
+      'Composes cohesive domain services from ``router_domains`` and mounts ``core``\n' +
+      'ahead of the domain sub-routers so overlapping paths keep their historical\n' +
+      'match precedence.\n' +
+      '"""\n' +
+      @ tests/coachFinalizeNextStepContract.test.js:118:1
+
+=== coachHistorySource.test.js  (pass 1/2)
+  ✗ App.tsx consumes the hook and drops the inline history state
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/coachHistorySource.test.js:33:1
+
+=== coachMessageActionsSource.test.js  (pass 7/10)
+  ✗ save-to-resources posts a markdown inline upload bound to the selected reply
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/coachMessageActionsSource.test.js:95:1
+  ✗ reply uploads wait for their own acknowledgement while other actions clear on status
+      expected applyHostMessage'
+      expected: true
+      actual: false
+      @ tests/coachMessageActionsSource.test.js:157:1
+  ✗ quick actions are wired into the coach conversation pane and docked reply
+      expected renderCoachConversationPane'
+      expected: true
+      actual: false
+      @ tests/coachMessageActionsSource.test.js:179:1
+
+=== coachProviderSetupSource.test.js  (pass 2/4)
+  ✗ coach recovery keeps workspace admission primary and exposes provider recovery beside it
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/coachProviderSetupSource.test.js:94:1
+  ✗ startup can scope a restored provider proof before sidecar memory finishes hydrating
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/coachProviderSetupSource.test.js:261:1
+
+=== coachSettingsPersistLoopGuardSource.test.js  (pass 1/6)
+  ✗ host-message subscription requests the bootstrap once, outside applyHostMessage identity churn
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/coachSettingsPersistLoopGuardSource.test.js:47:1
+  ✗ bootstrap request guard re-arms only on the false -> true host-state transition
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/coachSettingsPersistLoopGuardSource.test.js:65:1
+  ✗ live browser preview bootstrap runs once per mount with ref-stable callbacks
+      expected the browser preview bootstrap deps ref'
+      expected: true
+      actual: false
+      @ tests/coachSettingsPersistLoopGuardSource.test.js:77:1
+  ✗ persistCoachSettings skips the save when the payload already matches the saved snapshot
+      expected persistCoachSettings'
+      expected: true
+      actual: false
+      @ tests/coachSettingsPersistLoopGuardSource.test.js:108:1
+  ✗ settings save handlers stay user-intent only with no persisting effects
+      expected useEffect hooks in CoachSettingsView'
+      expected: true
+      actual: false
+      @ tests/coachSettingsPersistLoopGuardSource.test.js:143:1
+
+=== coachStreamingPlaceholderSource.test.js  (pass 1/2)
+  ✗ coach streaming shows one working label, never a canned placeholder sentence
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/coachStreamingPlaceholderSource.test.js:31:1
+
+=== coachTrainingInlineActionSource.test.js  (pass 0/1)
+  ✗ coach suggested action footer keeps a direct training handoff when a current card exists
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/coachTrainingInlineActionSource.test.js:11:1
+
+=== colorLiteralGuard.test.js  (pass 1/2)
+  ✗ the token layer carries no accent hue and no coloured focus border
+      -
+      '/* ==========================================================================\n' +
+      '   Trainer Design Tokens & Base Styles\n' +
+      '   ========================================================================== */\n' +
+      '\n' +
+      ':root {\n' +
+      '  /* There are no hardcoded hues in Trainer. Inside VS Code every token below\n' +
+      @ tests/colorLiteralGuard.test.js:54:1
+
+=== composerAttachmentSendGateSource.test.js  (pass 0/1)
+  ✗ image attachments keep staging separate from the verified send gate
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/composerAttachmentSendGateSource.test.js:20:1
+
+=== composerDockGovernance.test.js  (pass 7/8)
+  ✗ the shared composer writes scoped drafts and leaves results in the originating workspace
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/composerDockGovernance.test.js:116:1
+
+=== composerDockSource.test.js  (pass 2/3)
+  ✗ composer dock unifies footer hit size, radius, gap, and icon box
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/composerDockSource.test.js:27:1
+
+=== composerInteractionHistorySource.test.js  (pass 5/6)
+  ✗ App history uses only this session user sends and preserves a cursor plus scratch draft
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/composerInteractionHistorySource.test.js:83:1
+
+=== composerModelSwitchSource.test.js  (pass 2/7)
+  ✗ composer model switch prioritizes live models and excludes configured aliases after resolution
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/composerModelSwitchSource.test.js:13:1
+  ✗ composer model switch label stays honest about the active model
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/composerModelSwitchSource.test.js:67:1
+  ✗ composer model switch becomes an accessible icon action in a narrow sidebar
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/composerModelSwitchSource.test.js:80:1
+  ✗ Coach composer keeps model selection focused while setup stays in Settings
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/composerModelSwitchSource.test.js:91:1
+  ✗ composer model switch retains a restricted active model but blocks a stale selection before host dispatch
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/composerModelSwitchSource.test.js:167:1
+
+=== errorSurfaceSanitizerSource.test.js  (pass 2/4)
+  ✗ Coach tool and reasoning surfaces sanitize errors instead of dumping JSON
+      ENOENT: no such file or directory, open '/private/tmp/trainer-restore-run/extension/webview/src/components/coach/parts/index.tsx'"
+      @ tests/errorSurfaceSanitizerSource.test.js:16:1
+  ✗ Settings and Training display host errors through the sanitizer
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/errorSurfaceSanitizerSource.test.js:43:1
+
+=== filePreviewHtmlSanitizerSource.test.js  (pass 0/1)
+  ✗ parts FilePreviewRenderer sanitizes HTML before dangerouslySetInnerHTML
+      ENOENT: no such file or directory, open '/private/tmp/trainer-restore-run/extension/webview/src/components/parts/FilePreviewRenderer.tsx'"
+      @ tests/filePreviewHtmlSanitizerSource.test.js:18:1
+
+=== fiveViewA11ySource.test.js  (pass 1/2)
+  ✗ language switch keeps the active view and composer stays the super-entry
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/fiveViewA11ySource.test.js:32:1
+
+=== fiveViewHonestySource.test.js  (pass 0/3)
+  ✗ production App does not treat mockData or browserSidecar fixtures as host truth
+      -
+      'import { normalizeCoachOrientationRecord } from "../../../../shared/src/coachOrientationGovernance";\n' +
+      'import {\n' +
+      '  createEmptyTrainerStreamingState,\n' +
+      '  normalizeNextStepHint,\n' +
+      '  normalizeTrainerMessageParts,\n' +
+      '} from "../../../../shared/src/protocol";\n' +
+      @ tests/fiveViewHonestySource.test.js:15:1
+  ✗ conversation, settings, and training do not paint raw JSON, traceback, keys, or hidden reasoning as success
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/fiveViewHonestySource.test.js:27:1
+  ✗ pending reliability is distinct from acked success in shipped training chrome
+      ENOENT: no such file or directory, open '/private/tmp/trainer-restore-run/shared/src/trainingReliabilityGovernance.ts'"
+      @ tests/fiveViewHonestySource.test.js:49:1
+
+=== frontendInitializationOrderSource.test.js  (pass 1/2)
+  ✗ Coach settings normalizes model list status before model readiness branches
+      model list status declaration should remain explicit'
+      expected: true
+      actual: false
+      @ tests/frontendInitializationOrderSource.test.js:37:1
+
+=== goalModeSource.test.js  (pass 2/3)
+  ✗ goal mode reaches the sidecar only as an explicit opt-in flag
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/goalModeSource.test.js:11:1
+
+=== htmlSanitizerXssFixture.test.js  (pass 4/6)
+  ✗ coach DiffRenderer escapes or sanitizes before dangerouslySetInnerHTML
+      ENOENT: no such file or directory, open '/private/tmp/trainer-restore-run/extension/webview/src/components/coach/parts/DiffRenderer.tsx'"
+      @ tests/htmlSanitizerXssFixture.test.js:353:1
+  ✗ model HTML renderers sanitize; trusted Shiki/Mermaid keep library styles
+      ENOENT: no such file or directory, open '/private/tmp/trainer-restore-run/extension/webview/src/components/parts/CodeRenderer.tsx'"
+      @ tests/htmlSanitizerXssFixture.test.js:375:1
+
+=== i18nDirection.test.js  (pass 2/3)
+  ✗ the provider synchronizes root language and direction while App keeps preview overrides isolated
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/i18nDirection.test.js:76:1
+
+=== iconSystemContract.test.js  (pass 3/4)
+  ✗ icon-like SVGs render through TrainerIconBase (no ad-hoc raw icons)
+      -
+      expected:
+      actual:
+      @ tests/iconSystemContract.test.js:72:1
+
+=== leftoverBoundPlanFiveViewSource.test.js  (pass 0/1)
+  ✗ leftover bound plan competing identity is omitted after generate on five views
+      ENOENT: no such file or directory, open '/private/tmp/trainer-restore-run/extension/bundled/server/app/memory/workspace_recovery.py'"
+      @ tests/leftoverBoundPlanFiveViewSource.test.js:125:1
+
+=== leftoverSettingsChromeSource.test.js  (pass 1/3)
+  ✗ leftover Settings profile/rhythm is not live Settings identity when recovered (empty or with-step)
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/leftoverSettingsChromeSource.test.js:79:1
+  ✗ card-status leftover-not-live identity is fail-closed in sidecar, bundled copy, and host
+      ENOENT: no such file or directory, open '/private/tmp/trainer-restore-run/extension/bundled/server/app/api/training_card_identity.py'"
+      @ tests/leftoverSettingsChromeSource.test.js:392:1
+
+=== memoryPlanIsolationSource.test.js  (pass 1/2)
+  ✗ Plan still receives authoritative global plan and current project link state
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/memoryPlanIsolationSource.test.js:21:1
+
+=== onboardingWizardSource.test.js  (pass 3/6)
+  ✗ App derives onboarding state from workbench data and wires every wizard action
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/onboardingWizardSource.test.js:44:1
+  ✗ P2 \#24: the admission panel surfaces the classifier subject family honestly
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/onboardingWizardSource.test.js:117:1
+  ✗ P2 \#25: the skill context carries the subject family and literature skills prune on code
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/onboardingWizardSource.test.js:143:1
+
+=== operationMessageSurfaceScopingSource.test.js  (pass 1/6)
+  ✗ operation message surface union and banner gate localize scoped messages to their own view
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/operationMessageSurfaceScopingSource.test.js:37:1
+  ✗ host resource and plan statuses are intercepted before the store banner write
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/operationMessageSurfaceScopingSource.test.js:88:1
+  ✗ resource operation feedback is scoped to the Library surface
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/operationMessageSurfaceScopingSource.test.js:105:1
+  ✗ plan freeze and plan composer feedback is scoped to the Learning surface
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/operationMessageSurfaceScopingSource.test.js:123:1
+  ✗ training verify notices stay card-owned; the following failure scopes itself by its own marker
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/operationMessageSurfaceScopingSource.test.js:136:1
+
+=== orientationRailSource.test.js  (pass 1/2)
+  ✗ first-screen App source does not mount the orientation rail as chrome
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/orientationRailSource.test.js:15:1
+
+=== partsRendererExperienceSource.test.js  (pass 0/3)
+  ✗ typed markdown parts keep table and math rendering enabled
+      ENOENT: no such file or directory, open '/private/tmp/trainer-restore-run/extension/webview/src/components/parts/PartsRenderer.tsx'"
+      @ tests/partsRendererExperienceSource.test.js:22:1
+  ✗ part disclosure controls are localized, explicit buttons
+      ENOENT: no such file or directory, open '/private/tmp/trainer-restore-run/extension/webview/src/components/parts/PartsRenderer.tsx'"
+      @ tests/partsRendererExperienceSource.test.js:31:1
+  ✗ unknown parts never render raw payload JSON
+      ENOENT: no such file or directory, open '/private/tmp/trainer-restore-run/extension/webview/src/components/parts/PartsRenderer.tsx'"
+      @ tests/partsRendererExperienceSource.test.js:40:1
+
+=== planGovernanceActionsSource.test.js  (pass 2/12)
+  ✗ Plan exposes formal evidence actions and an explicit freeze control
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/planGovernanceActionsSource.test.js:53:1
+  ✗ Plan composer uses complete eight-language copy for modes, placeholders, and accessibility labels
+      expected the Plan composer mode block'
+      expected: true
+      actual: false
+      @ tests/planGovernanceActionsSource.test.js:70:1
+  ✗ formal plan generation is explicit while Plan discussion stays conversational
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/planGovernanceActionsSource.test.js:106:1
+  ✗ an empty Plan starts in discussion mode and only an explicit action selects generation
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/planGovernanceActionsSource.test.js:160:1
+  ✗ Learning resolves one governed primary action before rendering
+      expected the Plan view block'
+      expected: true
+      actual: false
+      @ tests/planGovernanceActionsSource.test.js:170:1
+  ✗ a frozen plan resumes existing work without replacement generation
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/planGovernanceActionsSource.test.js:367:1
+  ✗ bound pending evidence exposes approval and quiet reject/defer beside it
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/planGovernanceActionsSource.test.js:381:1
+  ✗ Plan moves next-task replies to Coach and protects an unsent composer draft
+      expected the Plan view block'
+      expected: true
+      actual: false
+      @ tests/planGovernanceActionsSource.test.js:401:1
+  ✗ Plan first screen keeps one primary action and leftover-not-live honesty
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/planGovernanceActionsSource.test.js:444:1
+  ✗ Plan first screen prefers verifyPlanAdvance what/why/next after snake→camel adapter
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/planGovernanceActionsSource.test.js:545:1
+
+=== planGovernanceStripSource.test.js  (pass 6/9)
+  ✗ Plan keeps project subplans collapsed, concise, and truthfully selectable
+      -
+      'import {\n' +
+      '  isValidElement,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState,\n' +
+      @ tests/planGovernanceStripSource.test.js:128:1
+  ✗ Plan keeps the global-to-project relationship compact and explicitly actionable
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/planGovernanceStripSource.test.js:155:1
+  ✗ App shows an honest empty Plan and supplies every compact Plan label from the eight-language copy
+      expected source marker:   const renderPlanView = () => ('
+      expected: true
+      actual: false
+      @ tests/planGovernanceStripSource.test.js:207:1
+
+=== planStepCardActionSource.test.js  (pass 0/1)
+  ✗ extension/tests/planStepCardActionSource.test.js
+      test failed'
+      @ tests/planStepCardActionSource.test.js:1:1
+
+=== planTrainingProviderRecoverySource.test.js  (pass 0/1)
+  ✗ workspace admission takes priority over provider recovery across coaching and plan actions
+      expected   const renderPlanView = () => ('
+      expected: true
+      actual: false
+      @ tests/planTrainingProviderRecoverySource.test.js:20:1
+
+=== planViewLocaleSource.test.js  (pass 0/1)
+  ✗ Plan primary UI uses complete locale copy instead of a Chinese-English branch
+      expected   const renderPlanView = () => ('
+      expected: true
+      actual: false
+      @ tests/planViewLocaleSource.test.js:30:1
+
+=== previewBody.test.js  (pass 0/2)
+  ✗ renderPreviewBody prefers html over structured and text bodies
+      -
+      @ tests/previewBody.test.js:63:1
+  ✗ renderPreviewBody falls back to structured, then text, then empty
+      -
+      @ tests/previewBody.test.js:97:1
+
+=== providerDraftSyncSource.test.js  (pass 1/3)
+  ✗ provider hydration preserves dirty drafts across discovery and scope changes, allowing current save/clear
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/providerDraftSyncSource.test.js:79:1
+  ✗ provider save and test commands use the language currently shown in Settings
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/providerDraftSyncSource.test.js:133:1
+
+=== providerSettingsLocaleSource.test.js  (pass 0/1)
+  ✗ provider settings actions and model menu use the complete locale copy
+      -
+      ''
+      expected:
+      actual: ''
+      @ tests/providerSettingsLocaleSource.test.js:17:1
+
+=== providerTemplateCatalogParity.test.js  (pass 1/2)
+  ✗ the settings template picker consumes the shared catalog through the host template command
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/providerTemplateCatalogParity.test.js:57:1
+
+=== recoveryLocaleSource.test.js  (pass 0/1)
+  ✗ recovery previews keep provider facts and locale-owned copy aligned
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/recoveryLocaleSource.test.js:14:1
+
+=== remoteSupportCopySource.test.js  (pass 0/1)
+  ✗ remote-support settings panel is record-driven with eight-language copy (§十五)
+      -
+      ''
+      expected:
+      actual: ''
+      @ tests/remoteSupportCopySource.test.js:20:1
+
+=== researchCommandSurface.test.js  (pass 1/2)
+  ✗ primary command catalog carries no research commands
+      catalog boundaries must exist'
+      expected: true
+      actual: false
+      @ tests/researchCommandSurface.test.js:26:1
+
+=== resourceDeletionGuard.test.js  (pass 2/4)
+  ✗ the inline upload copy follows the same rule
+      method not found: _discard_managed_inline_source'
+      expected: -1
+      actual: -1
+      @ tests/resourceDeletionGuard.test.js:50:1
+  ✗ the shipped sidecar carries the same guard
+      ENOENT: no such file or directory, open '/private/tmp/trainer-restore-run/extension/bundled/server/app/resources/service.py'"
+      @ tests/resourceDeletionGuard.test.js:70:1
+
+=== resourceOpenSourceContract.test.js  (pass 0/1)
+  ✗ resource open source contract routes library files through the VS Code editor
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/resourceOpenSourceContract.test.js:15:1
+
+=== resourceOrganizationConfirmHost.test.js  (pass 4/7)
+  ✗ PreviewBody source routes HTML through sanitizePreviewHtml
+      ENOENT: no such file or directory, open '/private/tmp/trainer-restore-run/extension/webview/src/components/preview/PreviewBody.tsx'"
+      @ tests/resourceOrganizationConfirmHost.test.js:67:1
+  ✗ host stamp required: organize_resources rejects model confirmed without host stamp
+      -
+      'from __future__ import annotations\n' +
+      '\n' +
+      'import logging\n' +
+      'from collections.abc import Iterable\n' +
+      '\n' +
+      'from .tool_handlers.organization_and_sandbox import (\n' +
+      @ tests/resourceOrganizationConfirmHost.test.js:87:1
+  ✗ click path sets stamp: host arms only after pending; request body consumes host arm only
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/resourceOrganizationConfirmHost.test.js:162:1
+
+=== resourcesComposerI18nSource.test.js  (pass 0/1)
+  ✗ Resources uses the localized shared composer, including all eight languages
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/resourcesComposerI18nSource.test.js:5:1
+
+=== resourcesLanguageConsistencySource.test.js  (pass 4/5)
+  ✗ app preserves the shared localized recovery copy for cross-view notices
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/resourcesLanguageConsistencySource.test.js:160:1
+
+=== resourcesOrientationSource.test.js  (pass 0/1)
+  ✗ Resources view renders snapshot-backed orientation instead of inferred readiness
+      expected Resources view render'
+      expected: true
+      actual: false
+      @ tests/resourcesOrientationSource.test.js:37:1
+
+=== resourcesTrainingUxContractSource.test.js  (pass 2/3)
+  ✗ each workbench view keeps its own primary object instead of embedding the coach transcript
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/resourcesTrainingUxContractSource.test.js:43:1
+
+=== resourcesWorkbenchActionsSource.test.js  (pass 10/16)
+  ✗ Resources uses real knowledge records and opens them through the existing native VS Code action
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/resourcesWorkbenchActionsSource.test.js:64:1
+  ✗ Resources makes library writes visibly unavailable without blocking search or opening
+      -
+      'import { useEffect,useId,useMemo,useRef,useState,type KeyboardEvent } from "react";\n' +
+      'import { Library } from "../../templates/Library";\n' +
+      'import { ResourceReader } from "../../templates/ResourceReader";\n' +
+      'import { SystemState } from "../../templates/SystemState";\n' +
+      'import { templateCopy } from "../../templates/templateCopy";\n' +
+      '\n' +
+      @ tests/resourcesWorkbenchActionsSource.test.js:249:1
+  ✗ Resources keeps a slow index refresh single-flight across rapid clicks
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/resourcesWorkbenchActionsSource.test.js:289:1
+  ✗ Resources correlates host mutation results so failed delete or restore clears its pending state
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/resourcesWorkbenchActionsSource.test.js:439:1
+  ✗ Resources preserves an explicit selection across views and records unmount separately
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/resourcesWorkbenchActionsSource.test.js:461:1
+  ✗ Resources starts a review card only from fresh, trusted, indexed material in a managed workspace
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/resourcesWorkbenchActionsSource.test.js:482:1
+
+=== resourcesWorkbenchOpenSource.test.js  (pass 2/3)
+  ✗ Resources opens library files only in VS Code without an in-Trainer content pane
+      expected the Resources render call'
+      expected: true
+      actual: false
+      @ tests/resourcesWorkbenchOpenSource.test.js:27:1
+
+=== resourcesWorkspaceAuthoritySource.test.js  (pass 2/3)
+  ✗ the sandbox copy keeps the project-workspace boundary explicit
+      -
+      'import { useEffect,useId,useMemo,useRef,useState,type KeyboardEvent } from "react";\n' +
+      'import { Library } from "../../templates/Library";\n' +
+      'import { ResourceReader } from "../../templates/ResourceReader";\n' +
+      'import { SystemState } from "../../templates/SystemState";\n' +
+      'import { templateCopy } from "../../templates/templateCopy";\n' +
+      '\n' +
+      @ tests/resourcesWorkspaceAuthoritySource.test.js:65:1
+
+=== rootMissingGoalCaptureSource.test.js  (pass 0/1)
+  ✗ a missing workspace root preserves a typed goal instead of disabling the Coach input
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/rootMissingGoalCaptureSource.test.js:14:1
+
+=== settingsAvailabilitySource.test.js  (pass 3/24)
+  ✗ settings receives and renders the final capability verdict without replacing probe facts
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/settingsAvailabilitySource.test.js:97:1
+  ✗ settings language selector routes shared labels through every supported locale
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsAvailabilitySource.test.js:138:1
+  ✗ settings keeps availability as the compact source of provider truth
+      expected the availability strip render'
+      expected: true
+      actual: false
+      @ tests/settingsAvailabilitySource.test.js:168:1
+  ✗ settings maps provider failures to retestable recovery states
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsAvailabilitySource.test.js:203:1
+  ✗ settings offers the recommended template before manual setup for a blank provider
+      expected the primary availability CTA'
+      expected: true
+      actual: false
+      @ tests/settingsAvailabilitySource.test.js:245:1
+  ✗ settings details give draft requirements precedence over saved-connection requirements
+      expected draft requirement guidance'
+      expected: true
+      actual: false
+      @ tests/settingsAvailabilitySource.test.js:287:1
+  ✗ settings routes incomplete drafts back to the form and only tests ready drafts
+      expected availability CTA resolution'
+      expected: true
+      actual: false
+      @ tests/settingsAvailabilitySource.test.js:319:1
+  ✗ settings takes a complete draft that only lacks its API key straight to that field
+      expected availability CTA resolution'
+      expected: true
+      actual: false
+      @ tests/settingsAvailabilitySource.test.js:350:1
+  ✗ settings blocks a draft model that conflicts with its connection policy before save or test
+      expected availability CTA resolution'
+      expected: true
+      actual: false
+      @ tests/settingsAvailabilitySource.test.js:367:1
+  ✗ settings takes rejected credentials directly to the API key field
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsAvailabilitySource.test.js:396:1
+  ✗ settings opens and focuses saved profiles from the offline recovery action
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsAvailabilitySource.test.js:423:1
+  ✗ settings localizes the visible model-card actions in all supported languages
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsAvailabilitySource.test.js:445:1
+  ✗ settings keeps draft model discovery scoped to its current connection
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsAvailabilitySource.test.js:462:1
+  ✗ settings makes the connection name explicitly optional in every supported locale
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsAvailabilitySource.test.js:484:1
+  ✗ availability exposes only non-secret provider facts
+      expected the availability strip render'
+      expected: true
+      actual: false
+      @ tests/settingsAvailabilitySource.test.js:494:1
+  ✗ settings keeps connection fields in a semantic form with a guarded Enter action
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsAvailabilitySource.test.js:536:1
+  ✗ settings does not hardcode provider credentials or endpoints
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsAvailabilitySource.test.js:549:1
+  ✗ settings derives readiness from the shared provider test truth source
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsAvailabilitySource.test.js:562:1
+  ✗ settings uses plain-language localized recovery copy for unavailable connections
+      expected the availability strip render'
+      expected: true
+      actual: false
+      @ tests/settingsAvailabilitySource.test.js:578:1
+  ✗ settings capability chips appear only from a verified live last-test
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsAvailabilitySource.test.js:602:1
+  ✗ settings final-capability Ready/Unavailable use 8-lang status phrases when chips allowed
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsAvailabilitySource.test.js:625:1
+
+=== settingsCompactSummarySource.test.js  (pass 0/2)
+  ✗ settings summary compaction removes duplicate labels before joining the connection summary
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsCompactSummarySource.test.js:18:1
+  ✗ settings model cache status is rendered once
+      -
+      expected: true
+      actual: false
+      @ tests/settingsCompactSummarySource.test.js:25:1
+
+=== settingsIALayoutSource.test.js  (pass 1/10)
+  ✗ settings opens on a blocker banner that only renders when something is wrong
+      expected the banner before the availability strip'
+      expected: true
+      actual: false
+      @ tests/settingsIALayoutSource.test.js:32:1
+  ✗ status bar anomaly jumps smooth-scroll and flash once, honoring reduced motion
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsIALayoutSource.test.js:60:1
+  ✗ answer style presets map exactly to the five context knobs
+      expected the answer style preset table'
+      expected: true
+      actual: false
+      @ tests/settingsIALayoutSource.test.js:72:1
+  ✗ preset derivation covers every legacy combination without dropping values
+      expected the preset derivation helper'
+      expected: true
+      actual: false
+      @ tests/settingsIALayoutSource.test.js:90:1
+  ✗ teaching is a flat section: preset radio, feedback + style, language, advanced-context fold
+      -
+      'data-settings-section="teaching"\n' +
+      '                aria-labelledby="settings-section-teaching-title"\n' +
+      '              >\n' +
+      '                <TeachingSettingsSection controller={controller} />\n' +
+      '              </section>\n' +
+      '            ) : null}\n' +
+      @ tests/settingsIALayoutSource.test.js:110:1
+  ✗ settings navigation has four categories with matching keyboard order and saves on change
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsIALayoutSource.test.js:140:1
+  ✗ model editor keeps protocol, limits and diagnostics on one surface
+      expected the single model editor form'
+      expected: true
+      actual: false
+      @ tests/settingsIALayoutSource.test.js:190:1
+  ✗ preferences groups appearance, memory, review and maintenance with original handlers
+      -
+      'data-settings-section="preferences"\n' +
+      '                aria-labelledby="settings-section-preferences-title"\n' +
+      '              >\n' +
+      '                <PreferencesSettingsSection\n' +
+      '                  controller={controller}\n' +
+      '                  onLaunchBrowserCapture={handleLaunchBrowserCapture}\n' +
+      @ tests/settingsIALayoutSource.test.js:214:1
+  ✗ empty connection state is one screen: paste card plus a template entry
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsIALayoutSource.test.js:245:1
+
+=== settingsModelAutoPrimeSource.test.js  (pass 0/1)
+  ✗ settings never auto-prime provider models; refresh stays an explicit action
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/settingsModelAutoPrimeSource.test.js:27:1
+
+=== settingsModelConfigurationSource.test.js  (pass 0/2)
+  ✗ settings stores context and output limits at the model level
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsModelConfigurationSource.test.js:18:1
+  ✗ settings keeps model allow and deny lists in the saved provider contract
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsModelConfigurationSource.test.js:68:1
+
+=== settingsModelPickerSource.test.js  (pass 2/13)
+  ✗ Settings keeps model selection compact, searchable, and recoverable with a full name
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsModelPickerSource.test.js:28:1
+  ✗ Settings applies the connection model policy without hiding an already selected invalid model
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsModelPickerSource.test.js:81:1
+  ✗ Settings commits an exact search with Enter and a list choice with its native change event
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsModelPickerSource.test.js:93:1
+  ✗ Settings does not let manual per-model limits bypass the connection model policy
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsModelPickerSource.test.js:110:1
+  ✗ Settings turns successful discovery into model selection without auto-selecting a model
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsModelPickerSource.test.js:155:1
+  ✗ Settings keeps first-time manual model entry compact until the user asks for it
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsModelPickerSource.test.js:179:1
+  ✗ Settings keeps per-model limits out of the primary model choice when a catalog is available
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsModelPickerSource.test.js:206:1
+  ✗ Settings never lets per-model limits bypass the connection model policy
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsModelPickerSource.test.js:218:1
+  ✗ Settings opens the model picker only for an empty draft and collapses it after hydration
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsModelPickerSource.test.js:235:1
+  ✗ Settings keeps the long model list searchable and defers inner save or test actions during discovery
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsModelPickerSource.test.js:256:1
+  ✗ smart paste auto-discovers and preselects a real model
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsModelPickerSource.test.js:312:1
+
+=== settingsProviderCatalogSource.test.js  (pass 0/3)
+  ✗ settings provider catalog keeps manually saved models in the per-model panel
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsProviderCatalogSource.test.js:28:1
+  ✗ provider draft dirty check counts a durable thinking intent change
+      expected providerHasDraftChanges declaration'
+      expected: true
+      actual: false
+      @ tests/settingsProviderCatalogSource.test.js:81:1
+  ✗ settings does not reuse saved model metadata for a changed provider transport
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsProviderCatalogSource.test.js:94:1
+
+=== settingsProviderProfilesSource.test.js  (pass 1/3)
+  ✗ settings provider profile actions are wired through App and rendered in Settings
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/settingsProviderProfilesSource.test.js:45:1
+  ✗ provider details keep connection status labels localized in every supported language
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsProviderProfilesSource.test.js:84:1
+
+=== settingsProviderTemplateFocusSource.test.js  (pass 0/1)
+  ✗ template setup carries a host focus request into the Settings API key field
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/settingsProviderTemplateFocusSource.test.js:20:1
+
+=== settingsRecoveryActionsSource.test.js  (pass 1/4)
+  ✗ Settings offers a direct sidecar restart and avoids duplicate model discovery actions
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/settingsRecoveryActionsSource.test.js:28:1
+  ✗ provider errors retain a safe, actionable recovery message in Settings
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/settingsRecoveryActionsSource.test.js:53:1
+  ✗ browser preview keeps provider recovery context when actions resolve immediately
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/settingsRecoveryActionsSource.test.js:72:1
+
+=== sidebarShellSource.test.js  (pass 8/10)
+  ✗ startup has no waiting shell and keeps only the fatal-error surface
+      -
+      'import { mountWorkbenchApp,renderStartupFailure } from "./bootstrapWorkbench";\n' +
+      '\n' +
+      'void mountWorkbenchApp().catch((error) => {\n' +
+      '  renderStartupFailure(error);\n' +
+      '});\n'
+      expected:
+      @ tests/sidebarShellSource.test.js:112:1
+  ✗ startup error copy still follows the saved coach language
+      -
+      'import { mountWorkbenchApp,renderStartupFailure } from "./bootstrapWorkbench";\n' +
+      '\n' +
+      'void mountWorkbenchApp().catch((error) => {\n' +
+      '  renderStartupFailure(error);\n' +
+      '});\n'
+      expected:
+      @ tests/sidebarShellSource.test.js:122:1
+
+=== skillCatalogI18nSource.test.js  (pass 1/3)
+  ✗ app recovery and common copy receive the active language with a defined fallback
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/skillCatalogI18nSource.test.js:40:1
+  ✗ coach composer accepts the full product language set and keeps drag attachment fallbacks readable
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState,\n' +
+      @ tests/skillCatalogI18nSource.test.js:80:1
+
+=== spinnerPrimitiveSource.test.js  (pass 2/3)
+  ✗ async surfaces use the spinner instead of bare text ellipses
+      ENOENT: no such file or directory, open '/private/tmp/trainer-restore-run/extension/webview/src/components/preview/PdfPreviewContent.tsx'"
+      @ tests/spinnerPrimitiveSource.test.js:48:1
+
+=== structuredPreview.test.js  (pass 5/9)
+  ✗ FilePreviewRenderer surfaces a table-specific teaching hint
+      -
+      @ tests/structuredPreview.test.js:243:1
+  ✗ FilePreviewRenderer labels spreadsheet previews explicitly
+      -
+      @ tests/structuredPreview.test.js:274:1
+  ✗ FilePreviewRenderer renders an xlsx fixture with explicit format and teaching copy
+      -
+      @ tests/structuredPreview.test.js:304:1
+  ✗ FilePreviewRenderer gives notebooks archive and presentation previews distinct guidance
+      -
+      @ tests/structuredPreview.test.js:338:1
+
+=== themeBridgeSource.test.js  (pass 5/6)
+  ✗ startup installs host theme observation for VS Code family theme changes
+      -
+      'import { mountWorkbenchApp,renderStartupFailure } from "./bootstrapWorkbench";\n' +
+      '\n' +
+      'void mountWorkbenchApp().catch((error) => {\n' +
+      '  renderStartupFailure(error);\n' +
+      '});\n'
+      expected:
+      @ tests/themeBridgeSource.test.js:203:1
+
+=== trainingCardOnlySource.test.js  (pass 3/7)
+  ✗ training empty state creates the first small card without redirecting to Coach
+      expected Coach handoff to be gated by a training card'
+      expected: true
+      actual: false
+      @ tests/trainingCardOnlySource.test.js:47:1
+  ✗ training cards preserve their explicit deliverable and verification contract
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingCardOnlySource.test.js:77:1
+  ✗ training restore targets become the current card and publish the visible single-card truth
+      expected current-card selection'
+      expected: true
+      actual: false
+      @ tests/trainingCardOnlySource.test.js:104:1
+  ✗ reliability facts passed into the focused card require its exact current identity
+      -
+      expected: true
+      actual: false
+      @ tests/trainingCardOnlySource.test.js:165:1
+
+=== trainingCoachFlowContractSource.test.js  (pass 1/3)
+  ✗ training answers and reflections keep authoritative commands before streamed Coach feedback
+      expected const sendTrainingFeedback ='
+      expected: true
+      actual: false
+      @ tests/trainingCoachFlowContractSource.test.js:19:1
+  ✗ learning replies stay in the one conversation
+      expected const coachRenderConversation'
+      expected: true
+      actual: false
+      @ tests/trainingCoachFlowContractSource.test.js:53:1
+
+=== trainingFlashAnswerBridgeSource.test.js  (pass 0/1)
+  ✗ training flash answers use the persisted learnerAnswer contract before feedback streaming
+      Expected "actual" to be strictly unequal to: -1'
+      expected: -1
+      actual: -1
+      @ tests/trainingFlashAnswerBridgeSource.test.js:11:1
+
+=== trainingLanguageConsistencySource.test.js  (pass 5/10)
+  ✗ training contextual chrome uses direct host text without a rewrite or alignment layer
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingLanguageConsistencySource.test.js:56:1
+  ✗ training contextual status and Coach jump actions resolve through all locale copy paths
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingLanguageConsistencySource.test.js:104:1
+  ✗ training entry actions and empty state use complete locale copy
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingLanguageConsistencySource.test.js:216:1
+  ✗ training composer labels and placeholders stay localized across every card state
+      expected training composer placeholder branch'
+      expected: true
+      actual: false
+      @ tests/trainingLanguageConsistencySource.test.js:274:1
+  ✗ training no-card and recoverable states keep actions, labels, and errors localized
+      expected no-card accessibility branch'
+      expected: true
+      actual: false
+      @ tests/trainingLanguageConsistencySource.test.js:346:1
+
+=== trainingLeftoverFormalCoachChromeSource.test.js  (pass 0/1)
+  ✗ Training source and coach chrome do not backfill leftover formal title
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingLeftoverFormalCoachChromeSource.test.js:11:1
+
+=== trainingLeftoverFormalFocusSource.test.js  (pass 0/3)
+  ✗ Training currentFocus does not use leftover formal title or coach focus
+      expected Training currentFocus picker'
+      expected: true
+      actual: false
+      @ tests/trainingLeftoverFormalFocusSource.test.js:11:1
+  ✗ Training and Practice views gate leftover teachingDecision.focusArea
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingLeftoverFormalFocusSource.test.js:30:1
+  ✗ Training first screen gates leftover handoff card chrome
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingLeftoverFormalFocusSource.test.js:43:1
+
+=== trainingLeftoverFormalSummarySource.test.js  (pass 0/1)
+  ✗ Training why and source do not use leftover formal plan.summary
+      expected Training why picker'
+      expected: true
+      actual: false
+      @ tests/trainingLeftoverFormalSummarySource.test.js:11:1
+
+=== trainingLeftoverFormalTargetSkillSource.test.js  (pass 0/1)
+  ✗ Training targetSkill does not backfill leftover formal title or focus
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingLeftoverFormalTargetSkillSource.test.js:20:1
+
+=== trainingLeftoverFormalTitleSource.test.js  (pass 0/1)
+  ✗ Training card title does not use leftover formal plan or task title
+      expected Training title picker'
+      expected: true
+      actual: false
+      @ tests/trainingLeftoverFormalTitleSource.test.js:11:1
+
+=== trainingLeftoverFormalWhyNowSource.test.js  (pass 0/1)
+  ✗ Training why-now does not backfill leftover formal title or focus
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingLeftoverFormalWhyNowSource.test.js:20:1
+
+=== trainingNextCardPlanBindingSource.test.js  (pass 0/1)
+  ✗ extension/tests/trainingNextCardPlanBindingSource.test.js
+      test failed'
+      @ tests/trainingNextCardPlanBindingSource.test.js:1:1
+
+=== trainingPracticeEvidenceCopy.test.js  (pass 1/10)
+  ✗ training pasted proof stays hidden until it can change the verdict
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingPracticeEvidenceCopy.test.js:75:1
+  ✗ training structured guidance is wired from App into a collapsed single-card helper layer
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingPracticeEvidenceCopy.test.js:124:1
+  ✗ training verification-return strip is driven by snapshot status, not summary guessing
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingPracticeEvidenceCopy.test.js:167:1
+  ✗ training composer uses explicit try reflect return phases for practice
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingPracticeEvidenceCopy.test.js:242:1
+  ✗ training return is an empty-draft command and handoff composer copy is localized
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingPracticeEvidenceCopy.test.js:277:1
+  ✗ training practice verification sends expected symbols while flash stays local-answer based
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingPracticeEvidenceCopy.test.js:309:1
+  ✗ training app prefers practice when selection is ambiguous and passes real flash card payload through
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingPracticeEvidenceCopy.test.js:337:1
+  ✗ training view stays truthful when no governed card exists and keeps verification card-scoped first
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingPracticeEvidenceCopy.test.js:353:1
+  ✗ training current card never borrows a global action or another card's next-hop copy
+      expected current-card copy'
+      expected: true
+      actual: false
+      @ tests/trainingPracticeEvidenceCopy.test.js:390:1
+
+=== trainingReturnBridgeSource.test.js  (pass 0/3)
+  ✗ formal training handoff draft persists without forcing navigation to Coach
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingReturnBridgeSource.test.js:22:1
+  ✗ practice return evidence uses the authoritative response status for both outcomes
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingReturnBridgeSource.test.js:57:1
+  ✗ training return and evidence adopt do not mint a plan, card, or task turn
+      -
+      ''
+      expected:
+      actual: ''
+      @ tests/trainingReturnBridgeSource.test.js:69:1
+
+=== trainingStatusFlowSource.test.js  (pass 2/8)
+  ✗ training keeps the coach bridge attached to the next action
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingStatusFlowSource.test.js:13:1
+  ✗ TrainingWorkbenchView skip uses hooked onCardStatusTransition persistence path
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingStatusFlowSource.test.js:50:1
+  ✗ TrainingCardRenderer cannot skip or grade without persistence callback
+      ENOENT: no such file or directory, open '/private/tmp/trainer-restore-run/extension/webview/src/components/parts/TrainingCardRenderer.tsx'"
+      @ tests/trainingStatusFlowSource.test.js:98:1
+  ✗ live reflect and return persist; leftover cannot fire them
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/trainingStatusFlowSource.test.js:129:1
+  ✗ leftover-not-live context rail does not paint leftover dump as live activity
+      -
+      ''
+      expected:
+      actual: ''
+      @ tests/trainingStatusFlowSource.test.js:205:1
+  ✗ Coach leftover chrome does not mount live training-lifecycle chrome for a dump card
+      -
+      ''
+      expected:
+      actual: ''
+      @ tests/trainingStatusFlowSource.test.js:244:1
+
+=== unconfiguredProviderGateSource.test.js  (pass 0/1)
+  ✗ unconfigured or missing-key providers cannot send as a live coach
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/unconfiguredProviderGateSource.test.js:18:1
+
+=== usageInsightsSource.test.js  (pass 4/6)
+  ✗ usage insights: every rendered phrase resolves through settingsText
+      view must render "使用洞察" through settingsText'
+      expected:
+      actual: |-
+      @ tests/usageInsightsSource.test.js:53:1
+  ✗ usage insights: view exposes stable hooks for E2E
+      -
+      'import { trainerCommands } from "../../../../../shared/src/commands";\n' +
+      'import {\n' +
+      '  resolveProviderModelTokenState\n' +
+      '} from "../../../../../shared/src/providerModelTokenLimits";\n' +
+      'import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";\n' +
+      'import { useProviderConnection } from "../../app/providerConnectionContext";\n' +
+      @ tests/usageInsightsSource.test.js:99:1
+
+=== viewStreamContinuitySource.test.js  (pass 0/2)
+  ✗ view rails keep an active stream visible after switching away from its source view
+      expected contextual result rail implementation'
+      expected: true
+      actual: false
+      @ tests/viewStreamContinuitySource.test.js:11:1
+  ✗ resource limit copy is shown only when the library reaches its upload limit
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/viewStreamContinuitySource.test.js:31:1
+
+=== viewSurfaceControlsSource.test.js  (pass 4/6)
+  ✗ Learning and Resources expose the expand control only when the host can open an editor tab
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/viewSurfaceControlsSource.test.js:77:1
+  ✗ the panel surface relaxes the sidebar reading caps through a wide container query
+      -
+      'import { mountWorkbenchApp,renderStartupFailure } from "./bootstrapWorkbench";\n' +
+      '\n' +
+      'void mountWorkbenchApp().catch((error) => {\n' +
+      '  renderStartupFailure(error);\n' +
+      '});\n'
+      expected:
+      @ tests/viewSurfaceControlsSource.test.js:105:1
+
+=== vscodeBootstrapRecoverySource.test.js  (pass 0/1)
+  ✗ bootstrap recovery reuses the existing VS Code bridge
+      bootstrap recovery must exist'
+      expected: true
+      actual: false
+      @ tests/vscodeBootstrapRecoverySource.test.js:10:1
+
+=== vscodeLanguagePersistence.test.js  (pass 6/10)
+  ✗ VS Code bootstrap restores every supported composer language without collapsing it to English
+      api.getState is not a function'
+      @ tests/vscodeLanguagePersistence.test.js:191:1
+  ✗ browser saved layout state round-trips every supported composer language
+      api.setState is not a function'
+      @ tests/vscodeLanguagePersistence.test.js:214:1
+  ✗ late browser preview API is captured after the module graph has loaded
+      -
+      expected:
+      @ tests/vscodeLanguagePersistence.test.js:234:1
+  ✗ postMessage returns the same dispatched operation identity and preserves explicit identity and target precedence
+      Cannot read properties of undefined (reading 'operation')"
+      @ tests/vscodeLanguagePersistence.test.js:312:1
+
+=== webviewLazyViews.test.js  (pass 0/1)
+  ✗ Resources and Training stay out of the Coach entry bundle until their view opens
+      -
+      'import {\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState\n' +
+      @ tests/webviewLazyViews.test.js:11:1
+
+=== workbenchSurfaceSource.test.js  (pass 6/8)
+  ✗ skill deck resolves on the trigger token so arguments keep the match
+      expected renderSkillDeck'
+      expected: true
+      actual: false
+      @ tests/workbenchSurfaceSource.test.js:60:1
+  ✗ custom skills persist the normalized, capped list
+      -
+      ''
+      expected:
+      actual: ''
+      @ tests/workbenchSurfaceSource.test.js:95:1

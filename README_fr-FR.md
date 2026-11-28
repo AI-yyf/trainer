@@ -232,7 +232,7 @@ Pour tes espaces de travail Linux/SSH distants, Trainer sépare **cerveau local 
 | Laisse ton dépôt git vierge | ⚠️ mélange fichiers | ⚠️ | n/a | ✅ un seul `<LibraryRoot>`, zéro écriture dans le dépôt |
 | Répétition espacée FSRS | ❌ | ❌ | ✅ | ✅ avec pause en flux actif |
 | Contrôle des permissions | ❌ | ⚠️ Trust basique | ❌ | ✅ échelle à 6 niveaux + verrou Remote-SSH |
-| Suite de tests publique | fermé | fermé | fermé | ✅ **6 719 tests unitaires/intégration + 480 E2E** |
+| Suite de tests publique | fermé | fermé | fermé | ✅ **4 182 tests unitaires/intégration + 105 E2E** |
 | Internationalisation | ⚠️ | ⚠️ | ⚠️ | ✅ **8 langues** contrôlées en CI |
 
 > Les autres outils accélèrent la production de code ; **Trainer s'assure que tu maîtrises vraiment ce que tu livres.**
@@ -318,9 +318,9 @@ Pour tes espaces de travail Linux/SSH distants, Trainer sépare **cerveau local 
 |---|---|---|
 | `extension/src/` | Hôte VS Code : commandes, SecretStorage, WorkspaceGateway, SidecarProcessManager | `79` fichiers TS (~`53 286` lignes) |
 | `extension/webview/src/` | Workbench React : 2 destinations, tiroir, compositeur unique, Shiki/KaTeX/Mermaid, 8 langues | `233` TS/TSX + `53` CSS (~`120 507` lignes) |
-| `extension/tests/` | Suite `node:test` : hôte, gouvernance partagée, i18n, capture web, sécurité | `324` fichiers · **`2 459` tests** |
+| `extension/tests/` | Suite `node:test` : hôte, gouvernance partagée, i18n, capture web, sécurité | `158` fichiers · **`1 446` tests** |
 | `server/app/` | Sidecar FastAPI : agent ReAct, pédagogie RethinkFun, FSRS, ingestion, évaluateur | `234` fichiers Python (~`178 520` lignes) |
-| `server/tests/` | Suite backend `pytest` : routes API, pédagogie, mémoire, protocoles, autorité | `300` fichiers · **`4 260` tests collectés** |
+| `server/tests/` | Suite backend `pytest` : routes API, pédagogie, mémoire, protocoles, autorité | `83` fichiers · **`2 736` tests collectés** |
 | `shared/src/` | Modules TypeScript purs déterministes partagés entre Hôte, Webview et Tests | `77` modules (~`30 414` lignes · `523` exports) |
 | `remote-extension/src/` | Companion Remote-SSH (`extensionKind: ["workspace"]`) | `2` fichiers TS (`746` lignes) |
 | `browser-extension/` | Extension Chromium MV3 : popup, files hors-ligne, menus contextuels et Side Panel | `9` fichiers (`7 245` lignes) |
@@ -349,13 +349,13 @@ Toutes les routes HTTP d'état retournent l'objet canonique **`WorkbenchSnapshot
 
 | Garantie | Portée et résultat vérifié | Commande |
 |---|---|---|
-| **Tests serveur (`pytest`)** | **300 fichiers · 4 260 tests** (plus sous-tests) | `npm run test:server` |
-| **Tests extension (`node:test`)** | **324 fichiers · 2 459 tests** (`2 458` réussis, `1` ignoré selon plateforme, `0` échec) | `npm run test:extension` |
+| **Tests serveur (`pytest`)** | **83 fichiers · 2 736 tests** (plus sous-tests) | `npm run test:server` |
+| **Tests extension (`node:test`)** | **158 fichiers · 1 446 tests** (`1 446` réussis, `0` ignoré selon plateforme, `0` échec) | `npm run test:extension` |
 | **Analyse statique & types** | `ruff check` (`0`) · `pyright` (`0`) · CSS + `tsc -b` (`0`) | `npm run check && npm run verify:server-pyright` |
 | **Géométrie UI** | Souveraineté du compositeur unique, 2 destinations, sans débordement (`340/420/460px`, dark/light, zh/en) | `npm run verify:ui-geometry` |
-| **Complétude i18n** | **212** `appUiCopy` + **220** `settingsText` + **273** `hostCommandCopy` sur **8 langues** (`0` manque) | `npm run verify:i18n` |
-| **Vocabulaire & secrets** | **68** fichiers UI conformes · **4 257** fichiers scannés sans clé en clair | `npm run verify:copy-vocabulary && npm run verify:credentials` |
-| **Playwright E2E & Remote-SSH** | **33** specs Playwright (`480` tests) + matrice sidecar réel + Ubuntu Remote-SSH L2 (`20/20`) | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
+| **Complétude i18n** | **194** `appUiCopy` + **196** `settingsText` + **273** `hostCommandCopy` sur **8 langues** (`0` manque) | `npm run verify:i18n` |
+| **Vocabulaire & secrets** | **53** fichiers UI conformes · **4 753** fichiers scannés sans clé en clair | `npm run verify:copy-vocabulary && npm run verify:credentials` |
+| **Playwright E2E & Remote-SSH** | **6** specs Playwright (`105` tests) + matrice sidecar réel + Ubuntu Remote-SSH L2 (`20/20`) | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
 | **Cibles CI de release** | **3 cibles bureau** : `win32-x64`, `darwin-arm64`, `linux-x64` | `.github/workflows/release.yml` |
 
 *(Note : la validation pédagogique humaine `T-0028` reste suivie comme étape manuelle dans [`docs/TRIAL-1.5.0-RC.md`](docs/TRIAL-1.5.0-RC.md).)*
@@ -407,6 +407,6 @@ Garanti automatiquement par `npm run verify:i18n` (`extension/webview/src/lib/i1
 
 **// Entraîne ton IA · Grandis avec ton IA**
 
-`v1.6.4` · Fait avec du café, FSRS, la pédagogie RethinkFun State-Flow, 6 719 tests automatisés et un coach qui refuse d'écrire ton code à ta place.
+`v1.6.4` · Fait avec du café, FSRS, la pédagogie RethinkFun State-Flow, 4 287 tests automatisés et un coach qui refuse d'écrire ton code à ta place.
 
 </div>

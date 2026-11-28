@@ -1,9 +1,9 @@
 # Trainer 规格说明书
 
-版本：v1.1
-最后更新：2026-10-17
+版本：v1.2
+最后更新：2026-11-28
 项目路径：本仓库根目录（`trainer/`）
-状态：P1 Release Candidate
+状态：与 v1.6.4 清单同步；教练工具面已收敛为 8 个原语（Trainer 2.0 重构）；跨周真实学习总验收（契约 §10）仍待人工签核
 
 > 产品真相以 `.trainer-convergence/product-contract.md`（v2.1，2026-11-21 锁定）与 [`docs/STRATEGY.md`](docs/STRATEGY.md) 为准；本文描述规格与实现细节，与契约冲突时以契约为准并在同一提交中修正本文。所有数据、资料与记忆统一保存在用户选定的资料库根目录 `<LibraryRoot>` 下。
 
@@ -54,7 +54,7 @@ Trainer = **通用技术教练（编程起点） / General Technology Coach, cod
 
 ```text
 1. Webview Product Layer
-   React 19 / Zustand / 8 语言 i18n / CSS design tokens
+   React 18 / Zustand / 8 语言 i18n / CSS design tokens
    components: coach/ learning/ resources/ training/ settings/
                progress/ common/ composer/ firstlook/ preview/
 
@@ -72,12 +72,11 @@ Trainer = **通用技术教练（编程起点） / General Technology Coach, cod
 4. Python Trainer Runtime (FastAPI)
    api/ (routers + routes/ 领域路由)
    llm/ (provider_service + coaching_* 子模块 + provider/ 包)
-   pedagogy/ (teaching_depth + skill_projection + implementation_coach)
-   memory/ (service + review_scheduler + workspace_recovery)
+   pedagogy/ (service + teaching_depth + implementation_coach + turn_decision)
    training/ (card_generator + card_router + fsrs_scheduler + handoff
              + skill_projection + plan_revision + attempt_store)
    planner/ resources/ evaluator/ affect/ workspace/ specs/
-   db/ (repository + attempt_store + plan_revision + resource_version)
+   db/ (repository + research_repository)
 
 5. Remote Companion (workspace-kind extension)
    read / search / hash / diagnostics / environment / verify (ProcessSpec v2)
@@ -268,7 +267,7 @@ Coach 默认工作在 inspect / annotate。destructive 需用户明确授权 + t
 ## 12. 设计原则
 
 ### Composer 是核心交互
-Composer 常驻于 Chat / Resources 两个目的地；对话所有权唯一，归属教练线程——所有目的地发出的消息进入同一线程，surface 只决定草稿与上下文锚的隔离。练习作答在卡片内完成，不占用 composer（composer 只服务对话）。
+Composer 常驻于 Chat / Resources 两个目的地；对话所有权唯一，归属教练线程——所有目的地发出的消息进入同一线程，surface 只决定草稿与上下文锚的隔离。练习作答、提示请求与反思同样从底部唯一 composer 提交；练习卡不渲染第二输入框（与 §4.2 及契约 §4 一致）。
 context chips / Ask Trainer... / + / Send
 支持 current file / selection / resource / image，统一从 + 展开。
 
