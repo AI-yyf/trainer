@@ -40,6 +40,7 @@ from ..coaching_reply_drafts import (
     _guided_domain_empty_reply,
 )
 from ..harness import estimate_tokens
+from ..learner_code_guard import LearnerCode, learner_code_note, streamable_learner_reply
 from ..prompts import (
     build_coaching_messages as _real_build_coaching_messages,
 )
@@ -1088,13 +1089,21 @@ class AgenticExecutionMixin:
             streamed_visible_text = ""
             tool_events: list[dict[str, Any]] = []
             holdback_chars = _stream_holdback_chars(response_language)
+            # The learner's own code is never handed back rewritten (learner_code_guard). A fenced
+            # block is shown whole once it closes, so what is shown is a prefix that only grows.
+            # A block still open when the text ends stays unshown, like any other unfinished tail.
+            learner = LearnerCode.for_turn(current_file=current_file, message=message)
+            code_note = learner_code_note(chinese=_prefers_chinese(response_language))
+
+            def guardable(buffered: str) -> str:
+                return streamable_learner_reply(_streamable_visible_prefix(buffered), learner, note=code_note)
 
             def safe_direct_reply_prefix() -> str:
                 if not native_stream_available or (
                     isinstance(coach_context, dict) and bool(coach_context.get("exercise_prompt"))
                 ):
                     return ""
-                visible = _streamable_visible_prefix(buffered_text)
+                visible = guardable(buffered_text)
                 if "trainer-image://" in visible:
                     cut_idx = visible.find("trainer-image://")
                     bang_idx = visible.rfind("![", 0, cut_idx)
@@ -1154,7 +1163,7 @@ class AgenticExecutionMixin:
                         # guardrails that strip internal metadata and reject
                         # mixed-script corruption, while preserving single-newline
                         # fenced code blocks so long lectures stream incrementally.
-                        visible = _streamable_visible_prefix(buffered_text)
+                        visible = guardable(buffered_text)
                         tail_sample = visible[-256:]
                         has_non_latin_tail = any("\u0370" <= ch <= "\u0e7f" for ch in tail_sample)
                         if (

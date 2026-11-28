@@ -65,6 +65,12 @@ from ..coaching_scaffold import (
     _scaffold_diagnosis,
     _scaffold_teaching_note,
 )
+from ..learner_code_guard import (
+    LearnerCode,
+    LearnerCodeStreamEmitter,
+    learner_code_note,
+    redact_learner_code_rewrites,
+)
 from ..library_practice import (
     build_library_practice,
     library_practice_requested,
@@ -379,6 +385,11 @@ class CoachingReplyMixin:
         grounded_completion: bool = False,
     ) -> str:
         visible_content = _strip_internal_coach_meta(content)
+        visible_content = redact_learner_code_rewrites(
+            visible_content,
+            LearnerCode.for_turn(current_file=current_file, message=message),
+            note=learner_code_note(chinese=_prefers_chinese(response_language)),
+        )
         visible_content = _strip_leading_html_shell_artifact(visible_content)
         if not visible_content.strip():
             if _looks_like_provider_html_shell(content):
@@ -777,6 +788,11 @@ class CoachingReplyMixin:
     ) -> str:
         grounded_completion = _has_successful_agent_tool_result(tool_events)
         reply = _strip_internal_coach_meta(content).strip()
+        reply = redact_learner_code_rewrites(
+            reply,
+            LearnerCode.for_turn(current_file=current_file, message=message),
+            note=learner_code_note(chinese=_prefers_chinese(response_language)),
+        )
         if not reply:
             return reply
 
@@ -1657,6 +1673,9 @@ async def _provider_service_coaching_reply_stream(
         yield self._onboarding_reply(response_language)
         return
 
+    learner = LearnerCode.for_turn(current_file=current_file, message=message)
+    note = learner_code_note(chinese=_prefers_chinese(response_language))
+
     model = self._resolve_model()
     history_limit, history_token_budget = self._smart_coaching_history_budget(model=model)
     messages = build_coaching_messages(
@@ -1693,9 +1712,12 @@ async def _provider_service_coaching_reply_stream(
         )
         if self._plain_completion_uses_agent_binding():
             raw_content = ""
-            pending_visible = ""
             yielded_visible = False
-            holdback_chars = _stream_holdback_chars(response_language)
+            emitter = LearnerCodeStreamEmitter(
+                learner,
+                note=note,
+                holdback_chars=_stream_holdback_chars(response_language),
+            )
             async for chunk in self._completion_stream_via_agent_binding(
                 messages,
                 temperature=0.7,
@@ -1705,7 +1727,6 @@ async def _provider_service_coaching_reply_stream(
                 cancel_event=cancel_event,
             ):
                 raw_content += chunk
-                pending_visible += chunk
                 if any("\u0370" <= ch <= "\u0e7f" for ch in chunk):
                     reply_corruption_detail = _mixed_script_reply_corruption_detail(
                         raw_content[-256:],
@@ -1726,16 +1747,10 @@ async def _provider_service_coaching_reply_stream(
                                 if reply_override:
                                     yield reply_override
                         return
-                if len(pending_visible) > holdback_chars:
-                    if holdback_chars <= 0:
-                        safe_prefix = pending_visible
-                        pending_visible = ""
-                    else:
-                        safe_prefix = pending_visible[:-holdback_chars]
-                        pending_visible = pending_visible[-holdback_chars:]
-                    if safe_prefix:
-                        yielded_visible = True
-                        yield safe_prefix
+                safe_prefix = emitter.push(raw_content)
+                if safe_prefix:
+                    yielded_visible = True
+                    yield safe_prefix
             reply_corruption_detail = _mixed_script_reply_corruption_detail(
                 raw_content,
                 message=message,
@@ -1755,9 +1770,11 @@ async def _provider_service_coaching_reply_stream(
                         if reply_override:
                             yield reply_override
                 return
-            if pending_visible:
+            rest = emitter.finish(raw_content)
+            if rest:
                 yielded_visible = True
-                yield pending_visible
+                yield rest
+            streamed = emitter.shown
             final_content = self.finalize_coaching_reply(
                 raw_content,
                 profile=profile,
@@ -1767,19 +1784,19 @@ async def _provider_service_coaching_reply_stream(
                 answer_mode=answer_mode,
                 coach_context=coach_context,
             )
-            if yielded_visible and raw_content and self.peek_last_reply_failure() is None:
+            if yielded_visible and streamed and self.peek_last_reply_failure() is None:
                 final_content = preserve_streamed_reply_prefix(
-                    raw_content,
+                    streamed,
                     final_content,
-                    raw_content,
+                    streamed,
                     response_language=response_language,
                 )
-            self._record_stream_finalization(raw_content, final_content)
+            self._record_stream_finalization(streamed, final_content)
             if not raw_content and final_content:
                 yield final_content
                 return
-            if final_content.startswith(raw_content) and final_content != raw_content:
-                yield final_content[len(raw_content) :]
+            if final_content.startswith(streamed) and final_content != streamed:
+                yield final_content[len(streamed) :]
             return
         client = self._get_client()
         stream, _ = await _await_provider_stream_with_cancellation(
@@ -1808,8 +1825,11 @@ async def _provider_service_coaching_reply_stream(
             return trimmed
 
         raw_content = ""
-        pending_visible = ""
-        holdback_chars = _stream_holdback_chars(response_language)
+        emitter = LearnerCodeStreamEmitter(
+            learner,
+            note=note,
+            holdback_chars=_stream_holdback_chars(response_language),
+        )
         finish_reason: str | None = None
 
         def _finish_seen() -> bool:
@@ -1830,7 +1850,6 @@ async def _provider_service_coaching_reply_stream(
                 if not text:
                     continue
                 raw_content += text
-                pending_visible += text
                 if any("\u0370" <= ch <= "\u0e7f" for ch in text):
                     reply_corruption_detail = _mixed_script_reply_corruption_detail(
                         raw_content[-256:],
@@ -1851,20 +1870,13 @@ async def _provider_service_coaching_reply_stream(
                                 if reply_override:
                                     yield reply_override
                         return
-                if len(pending_visible) > holdback_chars:
-                    if holdback_chars <= 0:
-                        safe_prefix = pending_visible
-                        pending_visible = ""
-                    else:
-                        safe_prefix = pending_visible[:-holdback_chars]
-                        pending_visible = pending_visible[-holdback_chars:]
-                    if safe_prefix:
-                        yielded_visible = True
-                        yield safe_prefix
+                safe_prefix = emitter.push(raw_content)
+                if safe_prefix:
+                    yielded_visible = True
+                    yield safe_prefix
         tail = _normalize_stream_chunk(reasoning_filter.flush())
         if tail:
             raw_content += tail
-            pending_visible += tail
         if not raw_content.strip() and finish_reason is None:
             json_fallback = extract_non_sse_json_stream_payload(stream)
             if json_fallback is not None:
@@ -1876,7 +1888,7 @@ async def _provider_service_coaching_reply_stream(
                 )
                 if recovered_json_text.strip():
                     raw_content = recovered_json_text
-                    pending_visible = recovered_json_text
+                    emitter.restart()
                     finish_reason = "stop"
         reply_corruption_detail = _mixed_script_reply_corruption_detail(
             raw_content,
@@ -1936,7 +1948,7 @@ async def _provider_service_coaching_reply_stream(
                     retry_text = ""
                 if retry_text.strip():
                     raw_content = retry_text
-                    pending_visible = retry_text
+                    emitter.restart()
                     # The recovered reply is complete: the original stream's
                     # truncated finish_reason must not mark it as truncated.
                     finish_reason = "stop"
@@ -1954,9 +1966,11 @@ async def _provider_service_coaching_reply_stream(
             api_key=self._api_key,
             allow_local_empty_fallback=True,
         )
-        if pending_visible:
+        rest = emitter.finish(raw_content)
+        if rest:
             yielded_visible = True
-            yield pending_visible
+            yield rest
+        streamed = emitter.shown
         final_content = self.finalize_coaching_reply(
             raw_content,
             profile=profile,
@@ -1966,19 +1980,19 @@ async def _provider_service_coaching_reply_stream(
             answer_mode=answer_mode,
             coach_context=coach_context,
         )
-        if yielded_visible and raw_content and self.peek_last_reply_failure() is None:
+        if yielded_visible and streamed and self.peek_last_reply_failure() is None:
             final_content = preserve_streamed_reply_prefix(
-                raw_content,
+                streamed,
                 final_content,
-                raw_content,
+                streamed,
                 response_language=response_language,
             )
-        self._record_stream_finalization(raw_content, final_content)
+        self._record_stream_finalization(streamed, final_content)
         if not raw_content and final_content:
             yield final_content
             return
-        if final_content.startswith(raw_content) and final_content != raw_content:
-            yield final_content[len(raw_content) :]
+        if final_content.startswith(streamed) and final_content != streamed:
+            yield final_content[len(streamed) :]
     except ContextBudgetExhaustedError:
         self._record_last_reply_override(
             stop_reason="context_budget_exhausted",
