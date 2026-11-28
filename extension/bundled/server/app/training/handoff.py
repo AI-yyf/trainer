@@ -17,7 +17,7 @@ from typing import Any
 from uuid import uuid4
 
 from ..core.models import TrainingCardCandidateSnapshot
-from ..memory.workspace_recovery import live_training_card_title
+from ..core.workspace_live_identity import live_training_card_title
 
 logger = logging.getLogger(__name__)
 

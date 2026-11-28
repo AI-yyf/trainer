@@ -18,7 +18,7 @@ from ..core.models import (
     TrainingCardCandidateSnapshot,
     TrainingCardScoreFactors,
 )
-from ..memory.workspace_recovery import live_training_card_title, live_training_why_this_card
+from ..core.workspace_live_identity import live_training_card_title, live_training_why_this_card
 from ..pedagogy.material_recommendation import (
     apply_material_bias_to_factors,
     routing_from_learner_state,

@@ -26,11 +26,11 @@ from ...core.models import (
     UserProfile,
     WorkbenchSnapshot,
 )
+from ...core.workspace_live_identity import is_formal_plan_live_for_fill
 from ...llm.coaching_replies import preserve_streamed_reply_prefix
 from ...llm.provider.service_support import has_successful_agent_tool_result
 from ...llm.provider_service import ProviderService, redact_provider_error
 from ...llm.stream_agent_metadata import merge_stream_agent_metadata
-from ...memory.workspace_recovery import leftover_formal_plan_is_live_for_fill
 from .. import coach_support
 from .._singleflight import (
     claim_session_request_singleflight,
@@ -1013,7 +1013,7 @@ async def _run_non_coach_prepared_turn_stream(
         if request.intent == "plan" and request.formal_plan_mutation:
             persisted_plan = runtime.repository.get_latest_plan(workspace_id)
             _leftover_after, leftover_runtime_after = core.domain.leftover_runtime_for_workspace(workspace_id)
-            if persisted_plan is not None and leftover_formal_plan_is_live_for_fill(
+            if persisted_plan is not None and is_formal_plan_live_for_fill(
                 plan=persisted_plan,
                 runtime=leftover_runtime_after,
                 existing=leftover_runtime_after,

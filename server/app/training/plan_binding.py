@@ -3,7 +3,7 @@
 from typing import Any
 
 from ..core.models import LearningPlan, TrainingPlanBinding
-from ..memory.workspace_recovery import formal_plan_is_live_runtime_identity
+from ..core.workspace_live_identity import formal_plan_is_live_runtime_identity
 
 
 def binding_matches_plan(

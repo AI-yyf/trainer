@@ -10,6 +10,21 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from ...core.workspace_live_identity import (
+    _recovered_overlay_empty_step as _recovered_overlay_empty_step,
+)
+from ...core.workspace_live_identity import (
+    formal_plan_is_live_runtime_identity as formal_plan_is_live_runtime_identity,
+)
+from ...core.workspace_live_identity import (
+    formal_task_is_live_runtime_identity as formal_task_is_live_runtime_identity,
+)
+from ...core.workspace_live_identity import (
+    is_formal_plan_live_for_fill as leftover_formal_plan_is_live_for_fill,
+)
+from ...core.workspace_live_identity import (
+    stale_formal_training_labels as leftover_formal_training_labels,
+)
 from ..transfer_skills import describe_transfer_skill_state, normalize_transfer_skill_state_record
 
 PLAN_RUNTIME_KEY = "latest_plan_runtime"
@@ -178,73 +193,7 @@ def live_evidence_binding(
     return binding_id
 
 
-def _recovered_overlay_empty_step(
-    runtime: dict[str, Any] | None,
-    existing: dict[str, Any] | None,
-    current_step: str = "",
-) -> bool:
-    """Recovered overlay with no live current_step is leftover-not-live."""
 
-    runtime = runtime if isinstance(runtime, dict) else {}
-    existing = existing if isinstance(existing, dict) else {}
-    step = (
-        _text(current_step)
-        or _text(runtime.get("current_step"))
-        or _text(existing.get("current_step"))
-    )
-    return bool(runtime or existing) and not step
-
-
-def formal_plan_is_live_runtime_identity(
-    *,
-    plan: Any | None = None,
-    runtime: dict[str, Any] | None = None,
-    existing: dict[str, Any] | None = None,
-    current_step: str = "",
-) -> bool:
-    """Leftover formal plan is live only when recovered runtime still carries its id."""
-
-    if plan is None:
-        return False
-    formal = _text(getattr(plan, "id", "") or getattr(plan, "plan_id", ""))
-    runtime = runtime if isinstance(runtime, dict) else {}
-    existing = existing if isinstance(existing, dict) else {}
-    runtime_step = (
-        _text(current_step)
-        or _text(runtime.get("current_step"))
-        or _text(existing.get("current_step"))
-    )
-    plan_step = _text(getattr(plan, "current_step", "") if plan is not None else "")
-    carried = _text(runtime.get("plan_id") or existing.get("plan_id"))
-    recovered = bool(runtime or existing)
-    if not formal:
-        return False
-    if not recovered:
-        return True
-    if _recovered_overlay_empty_step(runtime, existing, runtime_step):
-        return False
-    if not runtime_step:
-        return False
-    if plan_step and runtime_step != plan_step:
-        return False
-    return carried == formal
-
-
-def formal_task_is_live_runtime_identity(
-    *,
-    recovered: bool = False,
-    runtime_current_step: str = "",
-    task_title: str = "",
-) -> bool:
-    """Leftover formal task is live only when recovered runtime still names it."""
-
-    runtime_step = _text(runtime_current_step)
-    title = _text(task_title)
-    if not recovered:
-        return bool(title)
-    if not runtime_step:
-        return False
-    return bool(title) and runtime_step == title
 
 
 def formal_card_is_live_runtime_identity(
@@ -1042,39 +991,7 @@ def leftover_settings_learner_project_onboarding_is_not_live(
     )
 
 
-def leftover_formal_training_labels(
-    *,
-    plan: Any | None = None,
-    task_title: str = "",
-    task_goal: str = "",
-    live_plan: bool = False,
-    live_task: bool = False,
-) -> set[str]:
-    """Formal title/summary/old step that must not mint a recovered card."""
 
-    labels: set[str] = set()
-    if plan is not None and not live_plan:
-        for value in (
-            getattr(plan, "title", ""),
-            getattr(plan, "summary", ""),
-            getattr(plan, "why_now", ""),
-            getattr(plan, "current_step", ""),
-            getattr(plan, "next_after_current", ""),
-        ):
-            text = _text(value)
-            if text:
-                labels.add(text)
-        for stage in getattr(plan, "stages", None) or []:
-            stage_title = _text(getattr(stage, "title", ""))
-            if stage_title:
-                labels.add(stage_title)
-    task = _text(task_title)
-    if task and not live_task:
-        labels.add(task)
-    goal = _text(task_goal)
-    if goal and not live_plan and not live_task:
-        labels.add(goal)
-    return labels
 
 
 def leftover_formal_plan_identity_labels(*, plan: Any | None = None) -> set[str]:
@@ -1098,27 +1015,7 @@ def leftover_formal_plan_identity_labels(*, plan: Any | None = None) -> set[str]
     return labels
 
 
-def leftover_formal_plan_is_live_for_fill(
-    *,
-    plan: Any | None = None,
-    runtime: dict[str, Any] | None = None,
-    existing: dict[str, Any] | None = None,
-) -> bool:
-    """Title/summary fill is live only when recovered runtime still carries leftover plan id."""
 
-    runtime = runtime if isinstance(runtime, dict) else {}
-    existing = existing if isinstance(existing, dict) else {}
-    if not runtime and not existing:
-        return True
-    recovered_step = _text(runtime.get("current_step")) or _text(existing.get("current_step"))
-    if not recovered_step:
-        return False
-    return formal_plan_is_live_runtime_identity(
-        plan=plan,
-        runtime=runtime,
-        existing=existing,
-        current_step=recovered_step,
-    )
 
 
 def leftover_frozen_plan_blocks_generation(

@@ -1353,7 +1353,7 @@ def _training_card_context_for_persistence(
     args: dict[str, Any],
     current_file: dict[str, Any],
 ) -> tuple[str, str, str]:
-    from ...memory.workspace_recovery import live_training_card_title
+    from ...core.workspace_live_identity import live_training_card_title
 
     card_id = str(
         args.get("training_card_id")

@@ -19,8 +19,8 @@ from ...core.models import (
     SessionMessageResponse,
     TurnRequest,
 )
+from ...core.workspace_live_identity import is_formal_plan_live_for_fill
 from ...llm.provider_service import ProviderService
-from ...memory.workspace_recovery import leftover_formal_plan_is_live_for_fill
 from ...training.card_generator import CardGenerationProviderFailure
 from .._singleflight import remember_completed_request
 from ..router_support import overlay_session_response_honesty_stamps
@@ -249,7 +249,7 @@ def overlay_completed_session_or_turn_response(
     )
     leftover_plan, leftover_runtime = core.domain.leftover_runtime_for_workspace(workspace_id)
     leftover_runtime = leftover_runtime if isinstance(leftover_runtime, dict) else {}
-    live_for_attach = bool(leftover_runtime) and leftover_formal_plan_is_live_for_fill(
+    live_for_attach = bool(leftover_runtime) and is_formal_plan_live_for_fill(
         plan=snapshot.plan or leftover_plan,
         runtime=leftover_runtime,
         existing=leftover_runtime,

@@ -9,6 +9,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from ...core.workspace_live_identity import (
+    live_training_card_title as live_training_card_title,
+)
+from ...core.workspace_live_identity import (
+    live_training_why_this_card as live_training_why_this_card,
+)
 from .plan_persist_chrome import (
     PLAN_RUNTIME_KEY,
     _formal_plan_candidate_focus,
@@ -769,104 +775,7 @@ def live_task_converted_copy(
     }
 
 
-def live_training_card_title(
-    *,
-    plan: Any | None = None,
-    task: Any | None = None,
-    runtime: dict[str, Any] | None = None,
-    existing: dict[str, Any] | None = None,
-    task_title: str = "",
-    card_title: str = "",
-) -> str:
-    """Training-card chrome uses recovered current_step, not leftover formal titles."""
 
-    runtime = runtime if isinstance(runtime, dict) else {}
-    existing = existing if isinstance(existing, dict) else {}
-    recovered_step = (
-        _text(runtime.get("current_step"))
-        or _text(existing.get("current_step"))
-    )
-    recovered = bool(runtime or existing)
-    title = _text(card_title)
-    if recovered and not recovered_step:
-        return ""
-    live_plan = formal_plan_is_live_runtime_identity(
-        plan=plan,
-        runtime=runtime,
-        existing=existing,
-        current_step=recovered_step,
-    )
-    live_task = formal_task_is_live_runtime_identity(
-        recovered=recovered,
-        runtime_current_step=recovered_step,
-        task_title=_text(task_title) or _text(getattr(task, "title", "") if task is not None else ""),
-    )
-    leftover = leftover_formal_training_labels(
-        plan=plan,
-        task_title=_text(task_title) or _text(getattr(task, "title", "") if task is not None else ""),
-        live_plan=live_plan,
-        live_task=live_task,
-    )
-    if not live_plan and title and (
-        title in leftover or any(label and label in title for label in leftover)
-    ):
-        return recovered_step
-    return title
-
-
-def live_training_why_this_card(
-    *,
-    plan: Any | None = None,
-    task: Any | None = None,
-    runtime: dict[str, Any] | None = None,
-    existing: dict[str, Any] | None = None,
-    task_title: str = "",
-    card_title: str = "",
-    why_now: str = "",
-    kind: str = "current",
-) -> str:
-    """why_this_card uses recovered current_step, not leftover formal card titles."""
-
-    runtime = runtime if isinstance(runtime, dict) else {}
-    existing = existing if isinstance(existing, dict) else {}
-    recovered_step = (
-        _text(runtime.get("current_step"))
-        or _text(existing.get("current_step"))
-    )
-    recovered = bool(runtime or existing)
-    title = live_training_card_title(
-        plan=plan,
-        task=task,
-        runtime=runtime,
-        existing=existing,
-        task_title=task_title,
-        card_title=card_title,
-    )
-    live_plan = formal_plan_is_live_runtime_identity(
-        plan=plan,
-        runtime=runtime,
-        existing=existing,
-        current_step=recovered_step,
-    )
-    leftover = leftover_formal_training_labels(
-        plan=plan,
-        task_title=_text(task_title) or _text(getattr(task, "title", "") if task is not None else ""),
-        live_plan=False,
-        live_task=False,
-    )
-    why = _text(why_now)
-    leftover_not_live = recovered and (not recovered_step or not live_plan)
-    if leftover_not_live and leftover and why and (
-        why in leftover or any(label and label in why for label in leftover)
-    ):
-        why = recovered_step if recovered_step and recovered_step not in leftover else ""
-    if why:
-        return why
-    if title:
-        if kind == "next":
-            return f"{title} is the next training card."
-        return f"{title} is the current training card."
-    return ""
 
 
 def live_training_open_copy(

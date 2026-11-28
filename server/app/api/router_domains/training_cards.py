@@ -24,11 +24,11 @@ from ...core.models import (
     TurnRequest,
     UserProfile,
 )
-from ...llm.prompts import infer_coaching_scenario as infer_message_coaching_scenario
-from ...llm.prompts import infer_learner_signal as infer_message_learner_signal
-from ...memory.workspace_recovery import (
+from ...core.workspace_live_identity import (
     live_training_why_this_card,
 )
+from ...llm.prompts import infer_coaching_scenario as infer_message_coaching_scenario
+from ...llm.prompts import infer_learner_signal as infer_message_learner_signal
 from ...workspace.classifier import (
     is_code_like_current_file,
 )

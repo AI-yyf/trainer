@@ -20,7 +20,7 @@ from ..core.models import (
 )
 from ..core.models import TaskSpec as ApiTaskSpec
 from ..core.process_env import child_process_environment
-from ..memory.workspace_recovery import live_training_card_title
+from ..core.workspace_live_identity import live_training_card_title
 from ..specs.models import RequirementItem, TaskSpec
 from .check_cache import CHECK_RESULT_CACHE
 from .models import CheckCommand, CheckResult, CheckStatus, EvaluationRequest, SemanticReview
