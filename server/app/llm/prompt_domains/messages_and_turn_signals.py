@@ -174,12 +174,31 @@ def _build_learner_context_block(context: dict[str, Any]) -> str:
 
 
 def _language_instruction(response_language: str) -> str:
-    if response_language.lower().startswith("zh"):
+    """Reply language plus the one next-step label a reply in that language must use.
+
+    The label is stated here, once and in the reply's own language, because the stored next step is
+    read from that line. A real model asked for "the label in the reply's language" from an English
+    rule wrote `` `Next step:` `` inside Chinese replies (2026-11-28), which the reader cannot parse.
+    """
+    lowered = response_language.lower()
+    if lowered.startswith("zh"):
         return (
             "Respond in natural, stable Simplified Chinese. Do not mix in English except for code, API names, file paths, "
-            "or literal identifiers that should remain unchanged."
+            "or literal identifiers that should remain unchanged. "
+            "当回复以“下一步”收尾时，这一行必须以“下一步：”开头，写成纯文本："
+            "不要用英文标签，不要给标签加反引号、引号或加粗。"
         )
-    return f"Respond in {response_language} unless the learner explicitly asks to switch."
+    if lowered.startswith("en"):
+        return (
+            "Respond in English unless the learner explicitly asks to switch. "
+            "When a reply ends with the next-step line, that line must start with the plain text label "
+            "Next step: — no backticks, quotes, or bold around it."
+        )
+    return (
+        f"Respond in {response_language} unless the learner explicitly asks to switch. "
+        "When a reply ends with the next-step line, that line must start with the equivalent of the label "
+        "Next step: in this language, written as plain text with no backticks, quotes, or bold around it."
+    )
 
 
 def build_static_coaching_prefix(

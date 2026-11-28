@@ -71,7 +71,7 @@ from .harness import (
     RECENT_TOOL_KEEP as HARNESS_RECENT_TOOL_KEEP,
 )
 from .provider_service import redact_provider_error
-from .reply_continuity import visible_next_step
+from .reply_continuity import closing_action_step, visible_next_step
 from .tools import ToolContext, ToolRegistry
 
 logger = logging.getLogger("trainer.llm.agent_loop")
@@ -1997,10 +1997,10 @@ def _build_completion_continuity(
     )
     if not next_step:
         next_step = tool_result_text("next_step", "nextStep", "fallback_step", "recommended_action")
+    # A specific hint from the thread outranks an unlabelled sentence; the reply's closing
+    # instruction still beats the neutral default, and the reply's opening prose is never used.
     if not next_step:
-        candidate = _trim_sentence(content, 120)
-        if candidate and candidate != summary:
-            next_step = candidate
+        next_step = closing_action_step(content)
     if not next_step:
         next_step = default_next_step
     return summary, next_step

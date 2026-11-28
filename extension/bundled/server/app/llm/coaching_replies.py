@@ -30,7 +30,7 @@ from .prompts import extract_coaching_context
 from .provider.quota_copy import provider_quota_copy, provider_quota_reply
 from .provider.redaction import _compact_text, redact_provider_error
 from .provider.text import _contains_cjk, _visible_model_text
-from .reply_continuity import visible_next_step
+from .reply_continuity import closing_action_step, visible_next_step
 
 _INTERNAL_COACH_META_MARKERS = (
     "current coaching focus:",
@@ -878,8 +878,10 @@ def _agentic_completion_continuity(
         next_step = _compact_text(context.get("thread_next_step"), 120) or ""
     if not next_step:
         next_step = _compact_text(context.get("resume_hint"), 120) or ""
+    # Specific thread hints outrank an unlabelled sentence; the reply's closing instruction
+    # still beats the neutral default, and the reply's opening prose is never used.
     if not next_step:
-        next_step = _trim_sentence(content, 120)
+        next_step = closing_action_step(content)
     if not next_step:
         next_step = (
             "Continue from the same thread and verify the smallest concrete result."
