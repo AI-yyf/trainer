@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-28T06:40:16.605Z",
+  "generatedAt": "2026-11-28T07:11:07.490Z",
   "baseUrl": "http://127.0.0.1:34978",
   "steps": [
     {
@@ -7,7 +7,7 @@
       "status": "PASS",
       "detail": {
         "status": 200,
-        "session_id": "session-b3680abe72"
+        "session_id": "session-9fa5220bda"
       }
     },
     {
@@ -15,7 +15,7 @@
       "status": "PASS",
       "detail": {
         "status": 200,
-        "resource_id": "resource-e8f0d96b38"
+        "resource_id": "resource-103c3bc90d"
       }
     },
     {
@@ -66,7 +66,7 @@
       "status": "PASS",
       "detail": {
         "status": 200,
-        "attempt_id": "attempt-08c4846ba13b4be4b7cfa3fd17a5188a",
+        "attempt_id": "attempt-6afed5785b364671a25e317dd7fe7e85",
         "note": "synthetic card id; structural persistence only"
       }
     },
@@ -92,7 +92,7 @@
       "status": "PASS",
       "detail": {
         "status": 200,
-        "draft_id": "draft-264e5d90ca2a"
+        "draft_id": "draft-528128269066"
       }
     },
     {
@@ -101,7 +101,7 @@
       "detail": {
         "status": 200,
         "pending_ids": [
-          "draft-264e5d90ca2a"
+          "draft-528128269066"
         ]
       }
     },
@@ -119,7 +119,7 @@
         "status": 200,
         "has_summary": true,
         "resource_ids": [
-          "resource-e8f0d96b38"
+          "resource-103c3bc90d"
         ]
       }
     },

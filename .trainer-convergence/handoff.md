@@ -1013,3 +1013,42 @@ Backend pytest 2,828 passed (91 files); extension node:test 1,460 passed (161 fi
 ### Open for the owner
 
 (1) **The §10 sign-off** — `.trainer-convergence/evidence/real-model-story-2026-11-28.md`, unchanged by this pass. (2) **The two §5 budgets**: the product's own round trips are gone; what remains is the gateway's first event and the model's hidden reasoning, so the next lever is the endpoint or the model for the default pace (or accepting a truthful status line as the first visible content, which the contract's wording allows). (3) **`library_exec` on Windows** — fail-closed since the first pass; accept, or commission a Windows sandbox backend. (4) **The `leftover_*` isolation** — keep and plan the structural replacement as its own piece of work (my recommendation), or start it now. (5) Smaller: the plain lane's local scaffold is an old subsystem, and its scenario defaults still carry internal vocabulary inside Chinese sentences ("把当前原理钉在一处 live code boundary 上"); the host status copy and its language; the gateway's cache misses.
+
+## 2026-11-28 (fifth pass, continued) — the local scaffold speaks Chinese; the fix shown on the real sidecar
+
+Two things the fifth pass left open were closed without an owner's decision. Everything here is committed to `main`; nothing is pushed.
+
+### The fix, on the real sidecar
+
+The template fallback of the stored next step appears only when the model's reply carries no action of its own — once in twenty live turns — so the live gateway could not reproduce it on demand. `stub_fallback_probe.py` (outside the repository) runs the real sidecar process, the real routes and the real agent loop against a local OpenAI-compatible stub that replies with the words recorded from the live model; the sidecar verifies the stub's capabilities itself (chat, streaming, a forced no-op tool call). Same four story turns, same replies, a 91-character path:
+
+| Tree | Stored next step of the Thursday turn |
+|---|---|
+| before `ca08c00a` | 下一步：围绕 `refunds.py`、「里也碰到类似的超时重试问」 ，先在 `trainer-rm-stub-replay-uods5c82` 里查看… |
+| after `2b75773c` | 下一步：围绕 `refunds.py`、「超时重试问题」，先在 `refunds.py` 里查看… |
+
+With this path the 80-character cut fell inside the temporary folder's name, so no file name was shown at all. In the three turns before it the stored next step is each reply's own labelled action, on both trees. Record: `evidence/next-step-template-before-after-2026-11-28.md`. Limit: the model's words are replayed, not generated, and the live gateway was not run again after the fix.
+
+### The local scaffold's default sentences
+
+Without the agent loop a turn the model cannot answer is answered from local state, and its default sentences are constants. The Chinese ones carried the lane names of the prompt in English; under "这次没能连上模型服务" a learner read "把当前原理钉在一处 live code boundary 上". The contract (§3) asks UI copy for formal natural language and forbids internal terms.
+
+- "live code boundary" → 真实的代码边界; "function guidance 这条线" → 读函数这条线; "debug loop" → 调试循环; "adaptation" → 改造; "review rhythm" → 复习节奏; "diagnostics" → 诊断信息; "pause point / value" → 暂停点 / 变量值; "breakpoint / stack frame" → 断点 / 调用栈帧; "hover、signature help、definition" → 悬停提示、签名提示、跳转到定义; "remote / local" → 远程窗口 / 本地; "线程" → 这条主线.
+- A coach tone named in English ("encouraging") is said in Chinese ("鼓励"); a tone without a Chinese name falls through to the defaults.
+- English stays for names the learner meets in their own tools and in Trainer's settings: VS Code, SSH, WSL, dev container, API.
+
+Tests: `test_the_local_scaffold_speaks_chinese.py` (26: thirteen scenarios, two learner states, every default sentence).
+
+### Left for the owner: the failure copy's vocabulary
+
+"Trainer 当前卡在 provider path，所以这轮 coaching 还不能继续。", "Trainer 目前无法通过 network 连到这个 provider。", "先检查 network 路径或 proxy 设置，再重发这一轮。" — the same kind of mixing, on the path every misconfigured install goes through. It is pinned by `test_provider_service.py::test_provider_failure_copy_stays_readable_in_chinese` ("API key", "model name", "先切换 provider 或 gateway"), so it was not changed. The webview's Chinese locale says 模型连接 / 服务地址 / API 密钥 / 模型 and never "provider". Aligning the server's failure copy with it is about a dozen sentences and one test; my recommendation is to align.
+
+Wider, for later: 862 Chinese string literals in 107 server files embed English words ("provider" in 193, "model" in 50, "call site" and "contract" in 30 each, "probe" in 24). Many are prompt material or markers that never reach the learner; which ones do is not inventoried.
+
+### Gates on the final tree
+
+Backend pytest 2,854 passed (92 files); extension node:test 1,460 passed (161 files); Playwright 105 passed; installed-VSIX E2E 36/36 with a VSIX rebuilt from this tree; `npm run build` exit 0; pyright 0 errors over `server/app` and `server/tests`; ruff, `npm run check`, `verify:i18n`, `verify:copy-vocabulary`, `verify:credentials` (5,314 files, 0 findings) pass; real-sidecar experience matrix 12/12; `test:structural-journey` 18 PASS / 4 BLOCKED / 0 FAIL; `verify:local-latency` 5/5; `verify:ui-geometry` 360/360; `test:ui-a11y` 96/96.
+
+### Open for the owner
+
+(1) **The §10 sign-off** — `.trainer-convergence/evidence/real-model-story-2026-11-28.md`. (2) **The two §5 budgets** — the product's own round trips are gone; what remains is the gateway's first event and the model's hidden reasoning. Three roads: another endpoint or model for the default pace; a truthful status line as the first visible content (the contract's wording allows it); or accept the measured 4.5 s and say so in the contract. (3) **`library_exec` on Windows** — fail-closed since the first pass; accept, or commission a Windows sandbox backend (which needs a Windows machine to verify). (4) **The `leftover_*` isolation** — keep and plan the structural replacement as its own piece of work (my recommendation), or start it now. (5) **The failure copy's vocabulary** — above. (6) Smaller: the host status copy and its language; the gateway's cache misses.

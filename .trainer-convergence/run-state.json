@@ -240,6 +240,18 @@
         "library_exec on Windows",
         "leftover_* isolation: keep or plan the structural replacement"
       ]
+    },
+    "fifth_pass_continued": {
+      "local_scaffold": "Chinese default sentences no longer carry the prompt's English lane names or a raw coach tone (test_the_local_scaffold_speaks_chinese.py, 26)",
+      "next_step_template": "shown before/after on the real sidecar process with a scripted model and the recorded reply: evidence/next-step-template-before-after-2026-11-28.md",
+      "gates": "Backend pytest 2,854 passed (92 files); extension node:test 1,460 passed (161 files); Playwright 105 passed; installed-VSIX E2E 36/36 with a VSIX rebuilt from this tree; `npm run build` exit 0; pyright 0 errors over `server/app` and `server/tests`; ruff, `npm run check`, `verify:i18n`, `verify:copy-vocabulary`, `verify:credentials` (5,314 files, 0 findings) pass; real-sidecar experience matrix 12/12; `test:structural-journey` 18 PASS / 4 BLOCKED / 0 FAIL; `verify:local-latency` 5/5; `verify:ui-geometry` 360/360; `test:ui-a11y` 96/96.",
+      "owner_decisions_pending": [
+        "§10 sign-off (.trainer-convergence/evidence/real-model-story-2026-11-28.md)",
+        "§5 budgets: another endpoint/model, a truthful status line as first visible content, or accept 4.5 s and say so",
+        "library_exec on Windows: accept fail-closed, or commission a sandbox backend",
+        "leftover_* isolation: keep and plan separately, or start now",
+        "failure copy vocabulary: align the server's Chinese failure copy with the webview's (模型连接 / 服务地址 / API 密钥), one pinned test to update"
+      ]
     }
   }
 }

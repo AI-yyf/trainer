@@ -238,7 +238,7 @@ Trainer brings its full coaching and verification loop to remote Linux/SSH works
 | Keeps your git repo untouched | ⚠️ mixes artifacts | ⚠️ | n/a | ✅ single `<LibraryRoot>`, zero repo writes |
 | Spaced repetition on FSRS | ❌ | ❌ | ✅ | ✅ with live-flow review suppression |
 | Workspace permission model | ❌ | ⚠️ basic trust | ❌ | ✅ 6-tier ladder + hard Remote-SSH write lock |
-| Open automated test suite | closed | closed | closed | ✅ **4,288 unit/integration + 105 E2E cases** |
+| Open automated test suite | closed | closed | closed | ✅ **4,314 unit/integration + 105 E2E cases** |
 | Localization | ⚠️ | ⚠️ | ⚠️ | ✅ **8 languages** verified by CI completeness gate |
 
 > Other tools help you produce code faster; **Trainer makes sure you actually own what you build.**
@@ -355,7 +355,7 @@ All primary state-carrying HTTP routes return the canonical **`WorkbenchSnapshot
 
 | Gate | Scope & Verified Result | Command |
 |---|---|---|
-| **Server Tests (`pytest`)** | **91 files · 2,828 tests** | `npm run test:server` |
+| **Server Tests (`pytest`)** | **92 files · 2,854 tests** | `npm run test:server` |
 | **Extension & Shared (`node:test`)** | **161 files · 1,460 tests** (`1,460` passed, `0` skipped, `0` failed) | `npm run test:extension` |
 | **Static Analysis & Types** | `ruff check` (`0` errors) · `pyright` (`0` errors, over `server/app` **and** `server/tests`) · CSS + `tsc -b` (`0` errors) | `npm run check && npm run verify:server-pyright` |
 | **UI Geometry Matrix** | Single composer sovereignty, 2-destination shell, overflow checks (`340/420/460px`, dark/light, zh/en) | `npm run verify:ui-geometry` |
@@ -413,6 +413,6 @@ Verified cleanly by `npm run verify:i18n` with automated locale leak and missing
 
 **// Train Your AI · Grow With Your AI**
 
-`v1.6.4` · Made with coffee, FSRS, RethinkFun state-flow pedagogy, 4,393 automated tests, and a coach that refuses to write your code for you.
+`v1.6.4` · Made with coffee, FSRS, RethinkFun state-flow pedagogy, 4,419 automated tests, and a coach that refuses to write your code for you.
 
 </div>

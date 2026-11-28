@@ -220,6 +220,18 @@
     "remeasurement_fifth_pass_2026_11_28": {
       "status": "PASS",
       "evidence": "2026-11-28, final tree: Backend pytest 2,828 passed (91 files); extension node:test 1,460 passed (161 files); Playwright 105 passed; installed-VSIX E2E 36/36 with a VSIX rebuilt from this tree; `npm run build` exit 0; pyright 0 errors over `server/app` and `server/tests`; ruff, `npm run check`, `verify:i18n`, `verify:copy-vocabulary`, `verify:credentials` (5,311 files, 0 findings) pass; real-sidecar experience matrix 12/12; `test:structural-journey` 18 PASS / 4 BLOCKED / 0 FAIL; `verify:local-latency` 5/5; `verify:ui-geometry` 360/360; `test:ui-a11y` 96/96."
+    },
+    "local_scaffold_speaks_chinese_2026_11_28": {
+      "status": "PASS",
+      "evidence": "2026-11-28: the Chinese default sentences of the plain lane's local scaffold carried the prompt's lane names in English (\"把当前原理钉在一处 live code boundary 上\", \"function guidance 这条线\", \"review rhythm\", \"条 diagnostics\", \"保持 encouraging 这类语气\"). Every default sentence now reads as Chinese; English stays only for VS Code, SSH, WSL, dev container and API. test_the_local_scaffold_speaks_chinese.py (26). Not changed: the failure copy's own vocabulary, pinned by test_provider_failure_copy_stays_readable_in_chinese (owner's call)."
+    },
+    "next_step_template_before_after_2026_11_28": {
+      "status": "PASS",
+      "evidence": "2026-11-28: the recorded no-label reply of the story's Thursday turn replayed through the real sidecar process, real routes and real agent loop from a local OpenAI-compatible stub (the sidecar verifies the stub's chat, streaming and tool capabilities itself), 91-character path. Before ca08c00a: 「先在 `trainer-rm-stub-replay-uods5c82` 里查看」 (no file name; cut phrase 「…超时重试问」). After 2b75773c: 「围绕 `refunds.py`、「超时重试问题」，先在 `refunds.py` 里查看…」. evidence/next-step-template-before-after-2026-11-28.md. Limit: replayed words, not live generation."
+    },
+    "remeasurement_fifth_pass_continued_2026_11_28": {
+      "status": "PASS",
+      "evidence": "2026-11-28, final tree (ccfaeaa1): Backend pytest 2,854 passed (92 files); extension node:test 1,460 passed (161 files); Playwright 105 passed; installed-VSIX E2E 36/36 with a VSIX rebuilt from this tree; `npm run build` exit 0; pyright 0 errors over `server/app` and `server/tests`; ruff, `npm run check`, `verify:i18n`, `verify:copy-vocabulary`, `verify:credentials` (5,314 files, 0 findings) pass; real-sidecar experience matrix 12/12; `test:structural-journey` 18 PASS / 4 BLOCKED / 0 FAIL; `verify:local-latency` 5/5; `verify:ui-geometry` 360/360; `test:ui-a11y` 96/96."
     }
   }
 }
