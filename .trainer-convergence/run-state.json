@@ -212,6 +212,23 @@
         "library_exec on Windows",
         "leftover_* isolation: keep or plan the structural replacement"
       ]
+    },
+    "fourth_pass": {
+      "round_trips": "project file names are in the prompt; a short follow-up beside a live error runs tool-free in one call",
+      "guided_replies": "labelled last line mandatory; no rewrite of learner code under guided",
+      "leaks_fixed": [
+        "MiniMax control marker / tool_call / mm:think in replies",
+        "gateway empty-content sentence echoed",
+        "server sentences after the coach's last line",
+        "review reminder used as a success signal"
+      ],
+      "real_model_guided": "\"然后呢？\" 1 call, first visible 4.4-5.8 s; 12 turns: first visible median 4.5 s (worst 8.1 s), complete median 6.2 s",
+      "owner_decisions_pending": [
+        "§10 sign-off (.trainer-convergence/evidence/real-model-story-2026-11-28.md)",
+        "§5 budgets: endpoint/model choice",
+        "library_exec on Windows",
+        "leftover_* isolation: keep or plan the structural replacement"
+      ]
     }
   }
 }

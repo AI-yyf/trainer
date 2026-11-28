@@ -911,3 +911,60 @@ Backend pytest 2,767 passed (86 files); extension node:test 1,460 passed, 0 fail
 ### Open for the owner
 
 (1) **The §10 sign-off** — the document above. (2) **The two §5 budgets** are not met on this gateway. Options, in my order: a faster endpoint or model for the default pace; fewer model round trips in a turn (a "然后呢？" next to an error file does not need `learning_inspect` before reading the file — a tool-set question, not a latency tweak); or accept a truthful status line as the first visible content, which the contract's own wording allows. (3) **`library_exec` on Windows** — it is fail-closed there since the first pass (no kernel sandbox); accept, or commission a Windows sandbox backend (AppContainer / Job Objects) that cannot be developed or tested on this machine. (4) **The `leftover_*` isolation** — 1,251 references in 44 server files plus about 530 `leftover` mentions in the webview: predicates that keep state from an earlier session from being shown as live after a recovery or a workspace switch. Retiring it means replacing the predicates with one structural guarantee (a recovered workspace starts from nothing that was not re-verified) — a refactor of thousands of lines that needs the real-model journeys and the installed-VSIX suite as its net. My recommendation is to keep it for now and plan it as its own piece of work; the earlier refactors already pruned the webview side of it. (5) Carried over: the host status copy ("已配置的模型") and its language; the cache misses on the gateway side.
+
+## 2026-11-28 (fourth pass) — fewer model round trips, a one-call lane for nudges, and protocol that leaked into replies
+
+The third pass left one thing that did not need an owner's decision: the tool chain behind the slowest turn ("然后呢？" next to an error file: two to five model round trips, 7–31 s to its first visible word). This pass removes it and records what the real model did with the result. Everything here is committed to `main`; nothing is pushed.
+
+### Why every project question cost two extra round trips
+
+The extension host sends the project's file list to the server on every turn (`workspace_file_snapshot`). The server kept it for the `project_read` tool and never put it in the prompt, so the model could not know which files existed: for any project question it first called `project_read list`, then read a file, then answered. The tool schema is deliberately byte-stable across turns (the 8-primitive array, for the provider's cache), so this could not be fixed in the tool descriptions.
+
+- The file names (never the contents) are now a per-turn context block, at most 60 with "… and N more"; the open file is marked as already in the prompt (resolved against the snapshot's `root_uri`, not by suffix). The agent-loop instructions say `list` adds nothing unless the block says more files exist.
+- Measured with the real model: "然后呢？" went from three or four calls to two — the model still read a second file before answering.
+
+### A one-call lane for a nudge next to a live error
+
+"然后呢？", "下一步？", "这样对吗？" typed beside a file that shows an error need nothing the prompt does not hold: the open file, its diagnostics, the thread's last step. With tools mounted the model read a file already in the prompt and re-ran the diagnostics (two calls, 7.5 s to its first word); without tools, one call — first word at a median of 3 s, reply complete in about 4 s, and the replies were a pointed next move with no code.
+
+- `short_follow_up_next_to_live_error` (`llm/agent_tool_context.py`) mounts no tools for such a turn. Narrow on purpose: at most 24 characters, one line, no code, no word that asks for a tool (a list that errs towards matching), live diagnostics on the open file, no attachment, and no other lane flag (plan, card, note, resource, verification) set.
+- The tool scope is decided before the prompt is built, so the turn is not told it runs inside a tool loop; the prompt shrinks with it (about 4.4k tokens instead of 11k).
+- Tests: `test_fast_lane_short_follow_up.py` (26).
+
+### Guided replies end with the coach's own action
+
+- In guided mode the labelled last line is now mandatory ("an answer that leaves nothing for the learner to try is not finished"); the "bounded question" exemption stays for the other policies. The guided-mode code rule no longer contradicts itself: it used to allow "the fragment the learner needs for this step" while the default pace forbade rewriting the learner's function, and the model resolved the conflict by handing over a two-line `def get(...)`. Now: name the lines and the direction; a fenced block is a standalone example, never a rewrite of the learner's code.
+- Labelled action in the reply: 11 of 12 turns and 5 of 5 story turns (third pass: 12 of 12 under a prompt that still allowed the exemption and 3 of 5 in the last story run before this change; the count moves with the model).
+
+### Three more leaks the real model showed
+
+- *Provider protocol in the reply.* On the tool-free stream, one turn in six came out as `]<]minimax[>[<tool_call><mm:think>Let me read payments.py to see if there's a pattern.</mm:think>]<]minimax[>[…` — the model tried to call a tool on a request that carries none, and the attempt arrived as content: MiniMax's control marker, its tool-call tag and its `mm:think` spelling of reasoning, none of which the stream filter knew, on a lane that releases chunks as they arrive. `ReasoningBlockFilter` now hides all of them on every streaming path, with tags and markers split across chunks held until complete. Tests: `test_provider_protocol_never_reaches_the_learner.py` (8; 6 fail on the committed filter).
+- *The gateway's empty-content sentence.* The same gateway writes `[System: Empty message content sanitised to satisfy protocol]` where a model message has no content of its own (a step that only calls a tool). It entered the history and the next turn the model echoed it as the last line of its reply. It is stripped as protocol everywhere.
+- *Server sentences after the coach's last line; a review reminder as a success signal.* The third pass stopped one such sentence; this pass stops all of them (a reply that ends with its own labelled action is returned untouched), and `这一步算过的信号是：…` is no longer built from the review scheduler's reminders ("回到最近这一轮教练主线，先把这一步验证掉：…"), which name what to redo, not what will be observed. A pronoun fragment ("我在" from "我在 refunds.py 里也碰到…") is no longer an anchor of the learner's request. Tests in `test_next_step_stays_an_action.py` (14 in the file).
+
+### Contract §5 with the real model, final code (MiniMax-M2.7, guided, six turns twice, paced)
+
+| Turn | Third pass: first visible / complete | Now |
+|---|---|---|
+| "然后呢？" next to the error file | 17.7–31.5 s / 20.8–35.0 s (4–5 calls) | 4.4–5.8 s / 5.5–5.8 s (1 call) |
+| "这段为什么会报 KeyError？" | 1.9–2.2 s / 3.4–3.7 s | 2.3–3.9 s / 3.0–4.3 s (1 call) |
+| "你好" | 2.1–3.1 s / 2.9–3.8 s | 4.4–4.5 s / 5.6–6.4 s |
+| "讲解一下这个项目" | 4.6–10.5 s / 10.6–15.7 s | 5.5–8.1 s / 10.3–11.7 s |
+| idempotency, first question | 3.4–5.1 s / 6.6–7.1 s | 4.2–4.8 s / 6.5–7.3 s |
+| idempotency, follow-up | 4.3–7.1 s / 6.7–9.2 s | 4.0–5.7 s / 6.1–8.3 s |
+
+Twelve turns: first visible content median 4.5 s, worst 8.1 s (was 31.5 s); complete reply median 6.2 s (≤ 6 s in 5 of 12); 17 model calls for 12 turns, no restart of the first-output budget. The two budgets are still not met: the median did not move because the floor is elsewhere — the gateway's first event (1.0–2.6 s) and the model's hidden reasoning before its first visible token (0.4–8 s) — and the turns vary run to run with the gateway ("你好" was 2.1–3.1 s in one run and 4.4–4.5 s in the next). What this pass removed is the product's own share: the exploratory round trips and the outlier turn.
+
+The gateway answers 502 ("its own upstream failed") when the probes fire turns back to back; the server reports it as a failure turn without inventing a reply, and the probes now pause between turns and retry once.
+
+### Contract §10 story, final code
+
+`.trainer-convergence/evidence/real-model-story-2026-11-28.md` was regenerated: five turns, all ending with a labelled action, no learner function rewritten, the one code block a standalone gateway example; first visible 2.6–15.5 s. Turn 5 ("改好了，帮我确认一下") is the slow one: four tool calls in two steps before the coach confirms — reading a file the learner changed is legitimate work. The sign-off is still the owner's.
+
+### Gates on the final tree
+
+Backend pytest 2,810 passed (89 files); extension node:test 1,460 passed, 0 failed, 0 skipped (161 files); Playwright 105 passed; installed-VSIX E2E 36/36 with a VSIX rebuilt from the final tree; `npm run build` exit 0; pyright 0 errors over `server/app` and `server/tests`; ruff, `npm run check`, `verify:i18n`, `verify:copy-vocabulary`, `verify:credentials (5,296 files, 0 findings) pass; real-sidecar experience matrix 12/12; `test:structural-journey` 18 PASS / 4 BLOCKED / 0 FAIL; `verify:local-latency` 5/5; `verify:ui-geometry` 360/360; `test:ui-a11y` 96/96
+
+### Open for the owner
+
+(1) **The §10 sign-off** — the document above. (2) **The two §5 budgets**: the product's own round trips are gone; what remains is the gateway's first event and the model's hidden reasoning, so the next lever is the endpoint or the model for the default pace (or accepting a truthful status line as the first visible content, which the contract's wording allows). (3) **`library_exec` on Windows** — fail-closed since the first pass; accept, or commission a Windows sandbox backend. (4) **The `leftover_*` isolation** — keep and plan the structural replacement as its own piece of work (my recommendation), or start it now. (5) Smaller: the stored next step still falls back to a template ("围绕 … 先在 … 里查看…", with a file name cut to five characters in one run) when a guided reply has no action of its own; the host status copy and its language; the gateway's cache misses.

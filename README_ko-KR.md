@@ -232,7 +232,7 @@ Trainer 의 상태 흐름 기반 직관적 교수법은 AI 기술 크리에이�
 | Git 저장소를 깨끗이 유지 | ⚠️ 파일 혼재 | ⚠️ | 해당 없음 | ✅ 단일 `<LibraryRoot>`, 소스 저장소 쓰기 0 |
 | FSRS 간격 반복 | ❌ | ❌ | ✅ | ✅ 코딩 흐름 방해 방지 포함 |
 | 작업 영역 권한 계층 | ❌ | ⚠️ 기본 신뢰 창 | ❌ | ✅ 6단계 계층 + 원격 쓰기 차단 |
-| 공개 테스트 스위트 | 비공개 | 비공개 | 비공개 | ✅ **4,227 단위/통합 + 105 E2E** |
+| 공개 테스트 스위트 | 비공개 | 비공개 | 비공개 | ✅ **4,270 단위/통합 + 105 E2E** |
 | 다국어 완성도 | ⚠️ | ⚠️ | ⚠️ | ✅ **8개 언어** CI 완결성 게이트 |
 
 > 다른 도구는 코드를 더 빨리 뽑아내는 데 집중합니다; **Trainer는 당신이 만든 것을 진짜 자기 실력으로 만들게 합니다.**
@@ -320,7 +320,7 @@ Trainer 의 상태 흐름 기반 직관적 교수법은 AI 기술 크리에이�
 | `extension/webview/src/` | React 워크벤치: 2진입점, 서랍, 단일 입력창, Shiki/KaTeX/Mermaid, 8언어 | `233` TS/TSX + `53` CSS (약 `120,507` 줄) |
 | `extension/tests/` | `node:test` 스위트: 호스트, 공유 거버넌스, i18n, 브라우저 수집, 보안 | `161` 파일 · **`1,460` 테스트** |
 | `server/app/` | FastAPI sidecar: ReAct, RethinkFun, FSRS/메모리, 수집, 샌드박스 검증 | `234` Python 파일 (약 `178,520` 줄) |
-| `server/tests/` | `pytest` 백엔드 스위트(API, 교육, 메모리, 프로토콜, 권한) | `86` 파일 · **`2,767` 수집 테스트** |
+| `server/tests/` | `pytest` 백엔드 스위트(API, 교육, 메모리, 프로토콜, 권한) | `89` 파일 · **`2,810` 수집 테스트** |
 | `shared/src/` | Host·Webview·테스트가 공유하는 결정론적 거버넌스 순수 함수 모듈 | `77` 모듈 (약 `30,414` 줄 · `523` 익스포트) |
 | `remote-extension/src/` | Remote-SSH Companion (`extensionKind: ["workspace"]`) | `2` TS 파일 (`746` 줄) |
 | `browser-extension/` | Chromium MV3 팝업, 오프라인 큐, 컨텍스트 메뉴, Side Panel | `9` 파일 (`7,245` 줄) |
@@ -349,7 +349,7 @@ Trainer 의 상태 흐름 기반 직관적 교수법은 AI 기술 크리에이�
 
 | 게이트 | 범위 및 검증 결과 | 명령어 |
 |---|---|---|
-| **서버 테스트 (`pytest`)** | **86 파일 · 2,767 테스트** (및 서브테스트) | `npm run test:server` |
+| **서버 테스트 (`pytest`)** | **89 파일 · 2,810 테스트** (및 서브테스트) | `npm run test:server` |
 | **확장 테스트 (`node:test`)** | **161 파일 · 1,460 테스트** (`1,460` 통과, `0` 플랫폼 조건 스킵, `0` 실패) | `npm run test:extension` |
 | **정적 분석 & 타입** | `ruff check` (`0`) · `pyright` (`0`) · CSS + `tsc -b` (`0`) | `npm run check && npm run verify:server-pyright` |
 | **UI 지오메트리 게이트** | 단일 입력창 주권, 2진입점 셸, 오버플로우 검증 (`340/420/460px`, 다크/라이트, 중/영) | `npm run verify:ui-geometry` |
@@ -407,6 +407,6 @@ Trainer 의 상태 흐름 기반 직관적 교수법은 AI 기술 크리에이�
 
 **// AI를 훈련하고 · AI와 함께 성장하세요**
 
-`v1.6.4` · 커피와 FSRS, RethinkFun State-Flow 교육 커널, 4,332개의 자동화 테스트, 그리고 대신 코드를 쓰기를 거부하는 코치가 만들었습니다.
+`v1.6.4` · 커피와 FSRS, RethinkFun State-Flow 교육 커널, 4,375개의 자동화 테스트, 그리고 대신 코드를 쓰기를 거부하는 코치가 만들었습니다.
 
 </div>
