@@ -1648,6 +1648,36 @@ def _clean_request_anchor_candidate(value: object | None) -> str:
     return candidate[:80]
 
 
+def _file_name_anchor(value: object | None) -> str:
+    """The file name of a path, whole.
+
+    The 80-character cap above is for a phrase. Applied to a path before its last segment was
+    taken, it cut the name instead: a real workspace is often deeper than 80 characters, and the
+    stored next step said "先在 `refunds.` 里查看" (seen with a real model on 2026-11-28).
+    """
+    last_segment = str(value or "").replace("\\", "/").rsplit("/", 1)[-1]
+    return _clean_request_anchor_candidate(last_segment)
+
+
+_CJK_ANCHOR_PHRASE_LIMIT = 12
+# Particles after which a clause moves on: "里也碰到类似的|超时重试问题". "时" is left out on purpose —
+# it would cut "超时".
+_CJK_ANCHOR_PARTICLES = "的了是在有和与或就把给跟也里中上后前"
+
+
+def _cjk_anchor_phrase(phrase: str) -> str:
+    """A run of Chinese has no word gaps, so a plain cut lands inside a word: 「里也碰到类似的超时重试问」.
+
+    Within the limit the run stands as written. Past it, the phrase is what follows the clause's
+    last structural particle (「超时重试问题」), and nothing when there is no such cut.
+    """
+    if len(phrase) <= _CJK_ANCHOR_PHRASE_LIMIT:
+        return phrase
+    cut = max(phrase.rfind(particle) for particle in _CJK_ANCHOR_PARTICLES)
+    tail = phrase[cut + 1 :] if cut >= 0 else ""
+    return tail if 2 <= len(tail) <= _CJK_ANCHOR_PHRASE_LIMIT else ""
+
+
 def _request_relevance_anchor_terms(
     message: str | None,
     *,
@@ -1687,14 +1717,22 @@ def _request_relevance_anchor_terms(
             )
             # "我在 refunds.py 里也碰到…" opens with a pronoun and a preposition, not a subject:
             # left in, it became the anchor 「我在」 of a stored next step (seen with a real model).
+            # "我想真正搞懂幂等" keeps its pronoun — what follows one is the learner's own topic, and
+            # cutting it left 「想真正搞懂幂等」.
             phrase = re.sub(
                 r"^(?:\u6211\u4eec|\u4f60\u4eec|\u4ed6\u4eec|\u5979\u4eec|\u5b83\u4eec|\u6211|\u4f60|\u4ed6|\u5979|\u5b83)+"
-                r"(?:\u5728|\u7684|\u628a|\u7ed9|\u8ddf|\u548c|\u4e0e|\u4e5f|\u90fd)*",
+                r"(?:\u5728|\u7684|\u628a|\u7ed9|\u8ddf|\u4e0e|\u4e5f|\u90fd)+",
                 "",
                 phrase,
             )
+            phrase = re.sub(
+                r"^(?:\u6211\u4eec|\u4f60\u4eec|\u4ed6\u4eec|\u5979\u4eec|\u5b83\u4eec|\u6211|\u4f60|\u4ed6|\u5979|\u5b83)+$",
+                "",
+                phrase,
+            )
+            phrase = _cjk_anchor_phrase(phrase)
             if len(phrase) >= 2:
-                candidates.append(phrase[:12])
+                candidates.append(phrase)
 
     normalized_source = source.casefold()
     references_current_file = any(
@@ -1702,9 +1740,9 @@ def _request_relevance_anchor_terms(
         for marker in ("current file", "this file", "\u5f53\u524d\u6587\u4ef6", "\u8fd9\u4e2a\u6587\u4ef6", "\u5f53\u524d\u4ee3\u7801")
     )
     if isinstance(current_file, dict) and (has_explicit_subject or references_current_file):
-        raw_path = _clean_request_anchor_candidate(current_file.get("path"))
-        if raw_path:
-            candidates.append(raw_path.replace("\\", "/").rsplit("/", 1)[-1])
+        file_name = _file_name_anchor(current_file.get("path"))
+        if file_name:
+            candidates.append(file_name)
         selection = _clean_request_anchor_candidate(current_file.get("selection_text"))
         if selection:
             candidates.extend(
@@ -1868,15 +1906,15 @@ def _relevance_reanchor_next_step(
     response_language: str | None,
 ) -> str:
     anchor = _current_request_anchor_label(message, current_file=current_file)
+    if not anchor:
+        return ""
     path = ""
     if isinstance(current_file, dict):
-        path = _clean_request_anchor_candidate(current_file.get("path"))
-        if path:
-            path = path.replace("\\", "/").rsplit("/", 1)[-1]
+        path = _file_name_anchor(current_file.get("path"))
     if _prefers_chinese(response_language):
         if path:
             return (
-                f"\u4e0b\u4e00\u6b65\uff1a\u56f4\u7ed5 {anchor} \uff0c\u5148\u5728 `{path}` \u91cc\u67e5\u770b\u4e0e\u8fd9\u4e2a\u95ee\u9898\u76f4\u63a5\u76f8\u8fde\u7684"
+                f"\u4e0b\u4e00\u6b65\uff1a\u56f4\u7ed5 {anchor}\uff0c\u5148\u5728 `{path}` \u91cc\u67e5\u770b\u4e0e\u8fd9\u4e2a\u95ee\u9898\u76f4\u63a5\u76f8\u8fde\u7684"
                 "\u8f93\u5165\u3001\u5206\u652f\u6216\u8c03\u7528\uff0c\u5e26\u56de\u7b2c\u4e00\u6761\u5b9e\u9645\u8f93\u51fa\u6216\u62a5\u9519\u3002"
             )
         return f"\u4e0b\u4e00\u6b65\uff1a\u56f4\u7ed5 {anchor} \u5e26\u56de\u6700\u5c0f\u7684\u4ee3\u7801\u7247\u6bb5\u3001\u8f93\u5165\u8f93\u51fa\u6216\u62a5\u9519\uff0c\u6211\u4f1a\u53ea\u56f4\u7ed5\u8fd9\u4e2a\u70b9\u7ee7\u7eed\u3002"

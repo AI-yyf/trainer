@@ -5,6 +5,7 @@ from collections.abc import Iterator
 
 from ..core.models import TaskSpec as ApiTaskSpec
 from ..core.models import TaskSpecifyRequest
+from ..core.text_boundaries import SENTENCE_END_PATTERN
 from .models import (
     RequirementItem,
     TaskSpec,
@@ -90,7 +91,7 @@ class TaskSpecGenerator:
         return TaskSpecificationResult(spec=spec, warnings=warnings)
 
     def _derive_title(self, prompt: str) -> str:
-        sentence = re.split(r"[.!?。！？\n]", prompt.strip())[0]
+        sentence = SENTENCE_END_PATTERN.split(prompt.strip())[0]
         return sentence[:80] or "Trainer task"
 
     def _extract_requirements(self, prompt: str) -> list[RequirementItem]:

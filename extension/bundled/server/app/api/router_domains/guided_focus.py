@@ -8,6 +8,7 @@ from ...core.models import (
     MemorySnapshot,
     SandboxWriteRequest,
 )
+from ...core.text_boundaries import CLAUSE_END_PATTERN
 from ...llm.prompts import infer_coaching_scenario as infer_message_coaching_scenario
 from ...llm.turn_grounding import (
     looks_like_narration_opening,
@@ -445,13 +446,17 @@ class GuidedFocusDomainMixin(RouterDomainBase):
             # fall back to the previous anchor instead of drifting onto the
             # message prefix (2026-10-08 real-teaching review, cases 01-03).
             return None
-        first_clause = re.split(r"[，。！？；,.!?\n]", normalized_message, maxsplit=1)[0]
+        # A dot inside "refunds.py" is part of the name, not the end of the clause.
+        first_clause = CLAUSE_END_PATTERN.split(normalized_message, maxsplit=1)[0]
         first_clause = re.sub(
             r"^(?:please|can you|could you|help me|guide me|show me|tell me|请|现在|先帮我)\s+",
             "",
             first_clause,
             flags=re.IGNORECASE,
         )
+        # "我在 refunds.py 里也碰到…" opens with a pronoun and a preposition. Without them the
+        # clause names the focus; with them it repeats the request.
+        first_clause = re.sub(r"^(?:我|你|我们|你们)(?:在|的|把|给|跟|与)\s*", "", first_clause)
         first_clause = self.normalize_focus_candidate(first_clause)
         if self.is_specific_focus_candidate(first_clause):
             return first_clause
