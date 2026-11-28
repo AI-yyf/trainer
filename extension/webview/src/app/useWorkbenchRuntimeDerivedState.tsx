@@ -48,6 +48,7 @@ import {
 import { resolveResourceOpenTarget } from "../../../../shared/src/resourceOpen";
 import { resourceRecordIsAcknowledgedUpload } from "../../../../shared/src/resourceWorkbenchGovernance";
 import {
+  deriveAdmissionBindOrientation,
   deriveResourcesOrientation,
   resolveResourcesBindingIds,
   type ResourcesOrientationAction,
@@ -1139,6 +1140,11 @@ export function useWorkbenchRuntimeDerivedState(ctx: WorkbenchCtxAfterE2) {
       boundPlanId: bindings.boundPlanId,
       boundTrainingCardId: bindings.boundTrainingCardId,
       language: layout.composerLanguage,
+      admission: deriveAdmissionBindOrientation({
+        status: data.memory.workspace?.trainerWorkspace?.status,
+        projectPath: data.memory.workspace?.trainerWorkspace?.projectPath,
+        language: layout.composerLanguage,
+      }),
       materialRecommendation: data.memory.coachingAdaptation?.materialRecommendation,
       transferSceneCount: data.memory.coachingAdaptation?.transferSceneCount,
       transferState: liveTransferState?.state,
@@ -1150,6 +1156,8 @@ export function useWorkbenchRuntimeDerivedState(ctx: WorkbenchCtxAfterE2) {
     leftoverResourceSandboxStateNotLive,
     liveResources,
     data.memory.workspace?.latestPlanRuntime?.evidenceBinding,
+    data.memory.workspace?.trainerWorkspace?.projectPath,
+    data.memory.workspace?.trainerWorkspace?.status,
     leftoverTransferSkillNotLive,
     liveTransferState?.state,
     data.memory.workspace?.latestTransferState?.state,

@@ -13,7 +13,8 @@ export type ResourcesOrientationAction =
   | "open_plan"
   | "open_training"
   | "open_coach"
-  | "wait";
+  | "wait"
+  | "bind_learning_folder";
 
 export interface ResourcesOrientationInput {
   resourceCount?: number;
@@ -35,6 +36,63 @@ export interface ResourcesOrientationInput {
   materialRecommendation?: string;
   transferSceneCount?: number;
   transferState?: string;
+  /** Present when the workspace is not admitted for a managed library (see deriveAdmissionBindOrientation). */
+  admission?: AdmissionBindOrientation;
+}
+
+/** The one host step that moves an un-admitted workspace toward a managed library. */
+export type AdmissionBindStep = "choose_learning_folder" | "add_current_project" | "choose_project_folder";
+
+export interface AdmissionBindOrientation {
+  step: AdmissionBindStep;
+  why: string;
+  primaryActionLabel: string;
+  nextStep: string;
+}
+
+const UNADMITTED_WITH_PROJECT = new Set(["browse", "ignored"]);
+
+/**
+ * Zero-interception cold start (product contract §4): nothing is saved until the learner binds a
+ * learning folder, so the first screen that needs a save offers exactly that step. Without a root
+ * the step is choosing one; once a project is known the step is adding it, which leads to the root.
+ * A managed or unknown status yields nothing and leaves the normal orientation in place.
+ */
+export function deriveAdmissionBindOrientation(input: {
+  status?: string;
+  projectPath?: string;
+  language?: string;
+}): AdmissionBindOrientation | undefined {
+  const status = text(input.status);
+  if (!status || status === "managed") {
+    return undefined;
+  }
+  const copy = resourcesOrientationCopy(input.language);
+  if (status === "root-missing") {
+    return {
+      step: "choose_learning_folder",
+      why: copy.libraryNeedsLearningFolder,
+      primaryActionLabel: copy.chooseLearningFolder,
+      nextStep: copy.bindThenImport,
+    };
+  }
+  if (status === "project-found" && !text(input.projectPath)) {
+    return {
+      step: "choose_project_folder",
+      why: copy.libraryNeedsProjectDecision,
+      primaryActionLabel: copy.chooseProjectFolder,
+      nextStep: copy.bindThenImport,
+    };
+  }
+  if (status !== "project-found" && !UNADMITTED_WITH_PROJECT.has(status)) {
+    return undefined;
+  }
+  return {
+    step: "add_current_project",
+    why: copy.libraryNeedsProjectDecision,
+    primaryActionLabel: copy.addCurrentProject,
+    nextStep: copy.bindThenImport,
+  };
 }
 
 export interface ResourcesOrientationRecord {
@@ -48,6 +106,8 @@ export interface ResourcesOrientationRecord {
   advancedWhere: string;
   source: "snapshot";
   revision: number;
+  /** Set only for `bind_learning_folder`: which admission step the action runs. */
+  admissionStep?: AdmissionBindStep;
 }
 
 function text(value: string | undefined): string {
@@ -109,6 +169,7 @@ function record(
     advancedWhere: input.advancedWhere,
     source: "snapshot",
     revision: input.revision ?? 1,
+    ...(input.admissionStep ? { admissionStep: input.admissionStep } : {}),
   };
 }
 
@@ -154,6 +215,21 @@ export function deriveResourcesOrientation(input: ResourcesOrientationInput): Re
   const currentSearch = searchIsCurrent(input);
   const searchQuery = currentSearch ? text(input.searchQuery) : "";
   const searchHits = currentSearch ? input.searchHitCount ?? 0 : 0;
+
+  if (input.admission) {
+    // Nothing can be saved yet, so no other action is honest — not even for a library that already
+    // has resources. The material line is left out: it is advice for a working library.
+    return record({
+      objectLabel: copy.resourceLibrary,
+      state: "needs_setup",
+      why: input.admission.why,
+      primaryAction: "bind_learning_folder",
+      primaryActionLabel: input.admission.primaryActionLabel,
+      nextStep: input.admission.nextStep,
+      advancedWhere: copy.resourcesEmptyLibrary,
+      admissionStep: input.admission.step,
+    });
+  }
 
   if (resourceCount <= 0) {
     return emit({

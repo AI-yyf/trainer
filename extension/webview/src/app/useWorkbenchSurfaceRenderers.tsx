@@ -106,7 +106,6 @@ export function useWorkbenchSurfaceRenderers(ctx: WorkbenchCtxAfterK3) {
     stopRemoteVerification,
     trainingPersistencePending,
     requestTrainingPersistence,
-    trainerWorkspaceAdmission,
     resourceWriteAccess,
     workspaceSessionBlocked,
     workspaceSessionBlockMessage,
@@ -1104,6 +1103,33 @@ export function useWorkbenchSurfaceRenderers(ctx: WorkbenchCtxAfterK3) {
 
   const renderResourcesView = () => {
     const versionCheck = resourceVersionCheck?.scope === composerSessionKey ? resourceVersionCheck : undefined;
+    // The Resources banner's one binding action (contract §4): run the admission step the shared
+    // orientation named for the current status. The next status re-renders the banner with its step.
+    const handleResourcesOrientationActionWithAdmission = (
+      action: Parameters<typeof handleResourcesOrientationAction>[0],
+    ) => {
+      if (action !== "bind_learning_folder") {
+        handleResourcesOrientationAction(action);
+        return;
+      }
+      switch (resourcesOrientation?.admissionStep) {
+        case "choose_learning_folder":
+          runWorkspaceAdmissionCommand(trainerCommands.chooseTrainerWorkspaceRoot);
+          break;
+        case "choose_project_folder":
+          runWorkspaceAdmissionCommand(trainerCommands.chooseWorkspaceProject);
+          break;
+        case "add_current_project":
+          runWorkspaceAdmissionCommand(trainerCommands.adoptWorkspaceProject, {
+            responseLanguage: layout.composerLanguage,
+          });
+          break;
+        default:
+          runWorkspaceAdmissionCommand(trainerCommands.retryWorkspaceAdmission, {
+            responseLanguage: layout.composerLanguage,
+          });
+      }
+    };
     const copy = resourceVersionCopy[layout.composerLanguage];
     const currentResources = versionCheck ? new Map(liveResources.map((resource) => [resource.id, resource])) : undefined;
     return (
@@ -1176,15 +1202,10 @@ export function useWorkbenchSurfaceRenderers(ctx: WorkbenchCtxAfterK3) {
               ? appUiCopy(layout.composerLanguage, "资料库只显示已确认导入的资料。")
               : undefined
           }
-          onOrientationAction={handleResourcesOrientationAction}
+          onOrientationAction={handleResourcesOrientationActionWithAdmission}
           deletedResources={data.deletedResources}
           sandboxState={liveSandboxState}
           resourceWriteAccess={resourceWriteAccess}
-          onChooseWorkspaceRoot={
-            trainerWorkspaceAdmission?.status === "root-missing"
-              ? () => runWorkspaceAdmissionCommand(trainerCommands.chooseTrainerWorkspaceRoot)
-              : undefined
-          }
           restoreContext={resourceRestoreContext}
           onDebugVisibleFacts={(facts) =>
             activeView === "resources" ? postDebugVisibleFacts({ activeView: "resources", resources: facts }) : undefined

@@ -166,7 +166,6 @@ export interface ResourcesWorkbenchViewProps {
   onDeleteResources?: (resourceIds: string[]) => void | Promise<void>;
   onRestoreResources?: (resourceIds: string[]) => void | Promise<void>;
   onRefreshDeletedResources?: () => void | Promise<void>;
-  onChooseWorkspaceRoot?: () => void;
   /**
    * The App owns the cross-view conversation context.  The library reports the
    * resource currently open in the reader (explicit selection only, empty when
@@ -1680,7 +1679,6 @@ export function ResourcesWorkbenchView({
   onDeleteResources,
   onRestoreResources,
   onRefreshDeletedResources,
-  onChooseWorkspaceRoot,
   onResourceSelectionChange,
   onRestoreContextChange,
   resourceWriteAccess,
@@ -3487,8 +3485,13 @@ export function ResourcesWorkbenchView({
       {orientationState && (orientation?.state === "needs_setup" || orientationTone === "blocker" || (!canWriteResources && resources.length === 0)) ? (
         <SystemState kind={orientation?.state === "needs_setup" ? "empty" : orientationTone === "blocker" ? "recoverable-error" : "read-only"}
           title={orientationState}
-          detail={orientation?.state === "needs_setup" ? localize(language, "emptyBody") : orientation?.why}
-          action={orientation && orientationCanAct && !(orientation.state === "needs_setup" && canWriteResources)
+          // Binding a learning folder names its own reason; the empty-library text would hide it.
+          detail={orientation?.state === "needs_setup" && orientation.primaryAction !== "bind_learning_folder"
+            ? localize(language, "emptyBody")
+            : orientation?.why}
+          // While the workspace is not admitted the binding step is the one action, whatever the
+          // write flag says: the toolbar import cannot succeed until the step is done.
+          action={orientation && orientationCanAct && (orientation.primaryAction === "bind_learning_folder" || !(orientation.state === "needs_setup" && canWriteResources))
             ? { label: orientation.primaryActionLabel, onClick: () => onOrientationAction?.(orientation.primaryAction) }
             : undefined} />
       ) : null}
