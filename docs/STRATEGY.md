@@ -1,7 +1,7 @@
 # Trainer 产品与工程战略（Strategy）
 
 > 生效日期：2026-11-21 · 分支：`main`
-> 配套产品契约：[.trainer-convergence/product-contract.md](file:///Users/Apple/Desktop/trainer/.trainer-convergence/product-contract.md)（v2.1，locked）
+> 配套产品契约：[.trainer-convergence/product-contract.md](file:///Users/Apple/Desktop/trainer/.trainer-convergence/product-contract.md)（v2.2，locked）
 
 ---
 
@@ -65,7 +65,7 @@
 - **学习者只理解四个正式概念**：`目标`、`练习`、`掌握进度`、`资料`。禁用术语（候选卡、入库、确认入库、训练卡库、账本、投影、修订号、到期队列、练习记录确认、后续和回看、UI proxy 等）禁止出现在学习者可见文案中。
 - **同一事实只说一次 & 目标归一**：所有待复习内容统一为「今天要复习 N 个」；抽屉目标卡与 `Goal mode` 统一收归服务端目标真相，不再双轨并行；新项目允许零准入墙拦截直接开聊，首次沉淀资产时再温和绑定 `<LibraryRoot>`。
 - **对话内敛与静噪**：进度先给一句追溯到证据的人话，学习抽屉以单一 4 段正式能力条呈现 5 态投影（无百分比）；每条回复常驻快捷操作不超过 3 个（`复制 · 练一下 · 更多`）。
-- **浏览器端收口为捕获**：Popup 快速捕获与右键菜单直达本地 `<LibraryRoot>/Trainer Library/`；侧栏对话客户端冻结，不再扩展。
+- **浏览器端以捕获为主，并提供侧栏对话**：Popup 快速捕获与右键菜单直达本地 `<LibraryRoot>/Trainer Library/`；侧栏复用 VS Code 侧边栏的同一套工作台界面与唯一输入框，不另写对话逻辑，也不新增浏览器专属的学习功能（产品契约 v2.2 §9，2026-11-28）。
 
 ---
 

@@ -171,11 +171,34 @@
       "GUI geometry / a11y"
     ],
     "owner_decisions_2026_11_28": {
-      "api_key": "may be used for real-model verification (answered 是); not used yet, stored nowhere in the repository",
-      "browser_side_panel_chat": "kept; product-contract §9 to be rewritten to match and a one-click learning-folder binding is wanted (neither done yet)",
+      "api_key": "used on 2026-11-28 for real-model verification after the owner answered 是; kept in process memory only, stored nowhere in the repository",
+      "browser_side_panel_chat": "kept; contract v2.2 §9 rewritten to match; one-click learning-folder binding built and verified in the installed VSIX",
       "remaining_old_tests": "not to be restored; 1,360 pre-df0a3e2a server test functions stay out (924 pass at HEAD, 201 fail, 41 cannot be imported, 194 in test_api.py not run to completion)",
       "commits": "to main, not a branch; done 2026-11-28, not pushed",
       "still_open": "library_exec unavailable on Windows"
+    },
+    "continuation_after_decisions": {
+      "real_model": "MiniMax-M2.7 via the owner's gateway; label compliance 0/12 -> 12/12; \"why KeyError\" 6.6 s -> 4.0-4.8 s with 1 model call instead of 3; first visible content <= 2 s met once (gateway first event 1.0-3.4 s plus hidden reasoning)",
+      "fixed": [
+        "next step never taken from the reply opening prose",
+        "default pace: short reply, no rewrite of learner code, no re-read of the current file",
+        "stage line names the file being read",
+        "one-click binding on the Resources page",
+        "sidecar switch race (false failed-to-start)",
+        "pyright over server/tests 669 -> 0 and the gate extended",
+        "RouterDeps typed",
+        "vacuous KV-prefix test made real",
+        "dead code after a return removed"
+      ],
+      "contract": "v2.2: browser side-panel chat client kept (§9); STRATEGY.md and SPEC.md aligned",
+      "still_open": [
+        "contract §10 human teaching-quality sign-off and the host attestation path",
+        "first visible content <= 2 s on this gateway",
+        "stalled-stream watchdog / read timeout for generation",
+        "Windows library_exec",
+        "leftover_* references",
+        "host status copy wording and language alignment"
+      ]
     }
   }
 }

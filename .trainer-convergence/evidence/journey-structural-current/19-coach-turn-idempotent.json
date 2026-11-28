@@ -1,0 +1,7 @@
+{
+  "id": "19-coach-turn-idempotent",
+  "status": 200,
+  "provider": "structural-stub (scripted reply; wiring only)",
+  "coach_turn_events_after_replay": 1,
+  "goal_started_events_after_replay": 1
+}

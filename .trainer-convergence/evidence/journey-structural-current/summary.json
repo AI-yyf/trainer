@@ -1,0 +1,215 @@
+{
+  "generatedAt": "2026-11-28T02:51:59.494Z",
+  "baseUrl": "http://127.0.0.1:34978",
+  "steps": [
+    {
+      "id": "01-session-start",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "session_id": "session-04f970bc27"
+      }
+    },
+    {
+      "id": "02-resource-upload",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "resource_id": "resource-ab16e35329"
+      }
+    },
+    {
+      "id": "02b-resource-index",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "index_status": "indexed"
+      }
+    },
+    {
+      "id": "03-resource-search",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "hit_count": 1,
+        "indexed_resource_found": true
+      }
+    },
+    {
+      "id": "04-global-plan",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "plan_titles": []
+      }
+    },
+    {
+      "id": "05-real-plan-generate",
+      "status": "BLOCKED",
+      "detail": {
+        "status": 400,
+        "reason": "No real provider key in this session; fail-closed response recorded.",
+        "error": "{\"detail\":\"Trainer needs a saved model provider and API key before a coaching turn can start.\"}"
+      }
+    },
+    {
+      "id": "06-real-training-card",
+      "status": "BLOCKED",
+      "detail": {
+        "status": 400,
+        "reason": "Card generation is provider-gated; no real key in this session.",
+        "error": "{\"detail\":\"Trainer needs a saved model provider and API key before a coaching turn can start.\"}"
+      }
+    },
+    {
+      "id": "07-attempt-start",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "attempt_id": "attempt-1fd8586c5d704be993b740140e0565d4",
+        "note": "synthetic card id; structural persistence only"
+      }
+    },
+    {
+      "id": "08-attempt-evidence",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "trust_level": null,
+        "note": "self_reported by design; not host-attested"
+      }
+    },
+    {
+      "id": "09-browser-pair",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "workspace_id": "journey-structural-a"
+      }
+    },
+    {
+      "id": "10-browser-draft",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "draft_id": "draft-e53cff812027"
+      }
+    },
+    {
+      "id": "11-draft-visible-to-host",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "pending_ids": [
+          "draft-e53cff812027"
+        ]
+      }
+    },
+    {
+      "id": "12-draft-ack",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "id": "13-memory-summary",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "has_summary": true,
+        "resource_ids": [
+          "resource-ab16e35329"
+        ]
+      }
+    },
+    {
+      "id": "14-restart-restore",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "same_session": true
+      }
+    },
+    {
+      "id": "15-workspace-isolation",
+      "status": "PASS",
+      "detail": {
+        "search_status": 200,
+        "workspace_b_resource_ids": [],
+        "cross_workspace_leak": false
+      }
+    },
+    {
+      "id": "16-real-model-switch",
+      "status": "BLOCKED",
+      "detail": {
+        "reason": "No real provider key in this session; UI model-switch path is covered by trainer-settings-lifecycle / provider configuration specs."
+      }
+    },
+    {
+      "id": "17-remote-ssh-l2",
+      "status": "BLOCKED",
+      "detail": {
+        "reason": "No real Remote-SSH window in this environment."
+      }
+    },
+    {
+      "id": "18-coach-turn-ledger",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "provider": "structural-stub (scripted reply; wiring only)",
+        "goal_sessions": 1,
+        "goal_started_events": 1,
+        "coach_turn_events": 1,
+        "turn_key_rows": 1
+      }
+    },
+    {
+      "id": "19-coach-turn-idempotent",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "provider": "structural-stub (scripted reply; wiring only)",
+        "coach_turn_events_after_replay": 1,
+        "goal_started_events_after_replay": 1
+      }
+    },
+    {
+      "id": "20-goal-activity-ledger",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "provider": "not needed (local evaluator; stub still attached)",
+        "goal_activity_events": 1
+      }
+    },
+    {
+      "id": "21-ledger-inventory",
+      "status": "PASS",
+      "detail": {
+        "inventory": {
+          "browser_source_received": 1,
+          "coach_turn_recorded": 1,
+          "evidence_enqueued": 1,
+          "goal_activity_recorded": 1,
+          "goal_started": 1,
+          "resource_indexed": 1,
+          "sandbox_resource_synced": 1,
+          "training_evidence_recorded": 1
+        },
+        "missing": [],
+        "training_evidence_note": "from step 08 attempt evidence via the ledger bridge"
+      }
+    }
+  ],
+  "blocked": [
+    "05-real-plan-generate",
+    "06-real-training-card",
+    "16-real-model-switch",
+    "17-remote-ssh-l2"
+  ],
+  "failed": [],
+  "stubProviderSteps": []
+}

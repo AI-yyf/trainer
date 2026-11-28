@@ -318,9 +318,9 @@ Para projetos em Linux/SSH remotos, o Trainer divide **cérebro local e mãos re
 |---|---|---|
 | `extension/src/` | Host VS Code: comandos, SecretStorage, WorkspaceGateway, SidecarProcessManager | `79` arquivos TS (~`53.286` linhas) |
 | `extension/webview/src/` | Workbench React: 2 destinos, gaveta, compositor único, Shiki/KaTeX/Mermaid, 8 idiomas | `233` TS/TSX + `53` CSS (~`120.507` linhas) |
-| `extension/tests/` | Suíte `node:test`: host, governança compartilhada, i18n, captura web, segurança | `158` arquivos · **`1.446` testes** |
+| `extension/tests/` | Suíte `node:test`: host, governança compartilhada, i18n, captura web, segurança | `161` arquivos · **`1.460` testes** |
 | `server/app/` | Sidecar FastAPI: agente ReAct, pedagogia RethinkFun, FSRS, ingestão, avaliador | `234` arquivos Python (~`178.520` linhas) |
-| `server/tests/` | Suíte backend `pytest` de rotas API, pedagogia, memória e protocolos | `83` arquivos · **`2.736` testes coletados** |
+| `server/tests/` | Suíte backend `pytest` de rotas API, pedagogia, memória e protocolos | `84` arquivos · **`2.746` testes coletados** |
 | `shared/src/` | Módulos TypeScript puros determinísticos compartilhados entre Host, Webview e Testes | `77` módulos (~`30.414` linhas · `523` exports) |
 | `remote-extension/src/` | Companion Remote-SSH (`extensionKind: ["workspace"]`) | `2` arquivos TS (`746` linhas) |
 | `browser-extension/` | Extensão Chromium MV3: popup, filas offline, menus de contexto e Side Panel | `9` arquivos (`7.245` linhas) |
@@ -349,8 +349,8 @@ Todas as rotas HTTP principais de estado retornam o objeto único **`WorkbenchSn
 
 | Portão | Escopo e resultado verificado | Comando |
 |---|---|---|
-| **Testes do servidor (`pytest`)** | **83 arquivos · 2.736 testes** (mais subtestes) | `npm run test:server` |
-| **Testes da extensão (`node:test`)** | **158 arquivos · 1.446 testes** (`1.446` aprovados, `0` skip condicional, `0` falhas) | `npm run test:extension` |
+| **Testes do servidor (`pytest`)** | **84 arquivos · 2.746 testes** (mais subtestes) | `npm run test:server` |
+| **Testes da extensão (`node:test`)** | **161 arquivos · 1.460 testes** (`1.460` aprovados, `0` skip condicional, `0` falhas) | `npm run test:extension` |
 | **Análise estática e tipos** | `ruff check` (`0`) · `pyright` (`0`) · CSS + `tsc -b` (`0`) | `npm run check && npm run verify:server-pyright` |
 | **Geometria de UI** | Soberanía do compositor único, 2 destinos, zero overflow (`340/420/460px`, dark/light, zh/en) | `npm run verify:ui-geometry` |
 | **Completude i18n** | **194** `appUiCopy` + **196** `settingsText` + **273** `hostCommandCopy` em **8 idiomas** (`0` faltas) | `npm run verify:i18n` |

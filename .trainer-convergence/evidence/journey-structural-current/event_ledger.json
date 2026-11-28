@@ -1,0 +1,19 @@
+{
+  "inventory": {
+    "browser_source_received": 1,
+    "coach_turn_recorded": 1,
+    "evidence_enqueued": 1,
+    "goal_activity_recorded": 1,
+    "goal_started": 1,
+    "resource_indexed": 1,
+    "sandbox_resource_synced": 1,
+    "training_evidence_recorded": 1
+  },
+  "requiredFamilies": [
+    "goal_started",
+    "coach_turn_recorded",
+    "goal_activity_recorded",
+    "training_evidence_recorded"
+  ],
+  "missing": []
+}

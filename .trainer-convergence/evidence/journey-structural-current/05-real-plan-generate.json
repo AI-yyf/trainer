@@ -1,0 +1,6 @@
+{
+  "id": "05-real-plan-generate",
+  "status": 400,
+  "reason": "No real provider key in this session; fail-closed response recorded.",
+  "error": "{\"detail\":\"Trainer needs a saved model provider and API key before a coaching turn can start.\"}"
+}

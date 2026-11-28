@@ -1,0 +1,9 @@
+{
+  "id": "18-coach-turn-ledger",
+  "status": 200,
+  "provider": "structural-stub (scripted reply; wiring only)",
+  "goal_sessions": 1,
+  "goal_started_events": 1,
+  "coach_turn_events": 1,
+  "turn_key_rows": 1
+}

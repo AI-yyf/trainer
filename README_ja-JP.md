@@ -232,7 +232,7 @@ Trainer の状態フロー型直観指導メソッドは、AI 技術系クリエ
 | Git リポジトリを汚さない | ⚠️ ファイル混入 | ⚠️ | n/a | ✅ 単一 `<LibraryRoot>`、リポ書き込みゼロ |
 | FSRS 間隔反復 | ❌ | ❌ | ✅ | ✅ 実装集中時の自動抑止付き |
 | 権限レベル制御 | ❌ | ⚠️ 基本 Trust | ❌ | ✅ 6 段階 + リモート書込ハードロック |
-| 公開テストスイート | クローズド | クローズド | クローズド | ✅ **4,182 単体/統合 + 105 E2E** |
+| 公開テストスイート | クローズド | クローズド | クローズド | ✅ **4,206 単体/統合 + 105 E2E** |
 | 多言語対応 | ⚠️ | ⚠️ | ⚠️ | ✅ **8 言語**（CI 完全性ゲート保証） |
 
 > 他のツールは「コードを書く速度」を上げます；**Trainer は「書いたものを自分の力にする」ツールです。**
@@ -318,9 +318,9 @@ Trainer の状態フロー型直観指導メソッドは、AI 技術系クリエ
 |---|---|---|
 | `extension/src/` | VS Code ホスト：コマンド、SecretStorage、WorkspaceGateway、Sidecar 管理 | `79` TS ファイル（約 `53,286` 行） |
 | `extension/webview/src/` | React ワークベンチ：2 入口、ドロワー、単一入力欄、Shiki/KaTeX/Mermaid、8 言語 | `233` TS/TSX + `53` CSS（約 `120,507` 行） |
-| `extension/tests/` | `node:test` スイート：ホスト、共有ガバナンス、i18n、ブラウザ拡張、セキュリティ | `158` ファイル · **`1,446` テスト** |
+| `extension/tests/` | `node:test` スイート：ホスト、共有ガバナンス、i18n、ブラウザ拡張、セキュリティ | `161` ファイル · **`1,460` テスト** |
 | `server/app/` | FastAPI sidecar：ReAct、RethinkFun、FSRS/メモリ、取り込み、サンドボックス検証 | `234` Python ファイル（約 `178,520` 行） |
-| `server/tests/` | `pytest` バックエンドテスト（API、教育カーネル、メモリ、プロバイダ、権限） | `83` ファイル · **`2,736` 収集テスト** |
+| `server/tests/` | `pytest` バックエンドテスト（API、教育カーネル、メモリ、プロバイダ、権限） | `84` ファイル · **`2,746` 収集テスト** |
 | `shared/src/` | Host・Webview・テストで共有する決定論的ガバナンス純粋関数モジュール | `77` モジュール（約 `30,414` 行 · `523` エクスポート） |
 | `remote-extension/src/` | Remote-SSH Companion (`extensionKind: ["workspace"]`) | `2` TS ファイル（`746` 行） |
 | `browser-extension/` | Chromium MV3 ポップアップ、オフラインキュー、コンテキストメニュー、Side Panel | `9` ファイル（`7,245` 行） |
@@ -349,8 +349,8 @@ Trainer の状態フロー型直観指導メソッドは、AI 技術系クリエ
 
 | ゲート | 対象と検証結果 | コマンド |
 |---|---|---|
-| **サーバーテスト (`pytest`)** | **83 ファイル · 2,736 テスト**（＋サブテスト） | `npm run test:server` |
-| **拡張機能テスト (`node:test`)** | **158 ファイル · 1,446 テスト**（`1,446` 合格、`0` 条件スキップ、`0` 失敗） | `npm run test:extension` |
+| **サーバーテスト (`pytest`)** | **84 ファイル · 2,746 テスト**（＋サブテスト） | `npm run test:server` |
+| **拡張機能テスト (`node:test`)** | **161 ファイル · 1,460 テスト**（`1,460` 合格、`0` 条件スキップ、`0` 失敗） | `npm run test:extension` |
 | **静的解析 & 型検証** | `ruff check` (`0`) · `pyright` (`0`) · CSS + `tsc -b` (`0`) | `npm run check && npm run verify:server-pyright` |
 | **UI ジオメトリ検査** | 単一入力欄主権、2 入口シェル、はみ出し検査（`340/420/460px` × 明暗 × 中英） | `npm run verify:ui-geometry` |
 | **i18n 完全性ゲート** | **194** `appUiCopy` + **196** `settingsText` + **273** `hostCommandCopy` × **8 言語**（欠損 0） | `npm run verify:i18n` |
@@ -407,6 +407,6 @@ UI、設定画面、ホスト通知、ブラウザ拡張機能、README が **8 
 
 **// AIを鍛える · AIとともに成長する**
 
-`v1.6.4` · コーヒーと FSRS、RethinkFun State-Flow 教育カーネル、4,287 個の自動テスト、そしてあなたの代わりにコードを書くことを拒むコーチで作られています。
+`v1.6.4` · コーヒーと FSRS、RethinkFun State-Flow 教育カーネル、4,311 個の自動テスト、そしてあなたの代わりにコードを書くことを拒むコーチで作られています。
 
 </div>
