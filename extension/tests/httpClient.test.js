@@ -24,8 +24,29 @@ const constantsModulePath = path.resolve(
   'constants.js',
 );
 
-function waitFor(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+// Wall-clock budget for the server to report an abort the client has already
+// made. Closing the socket is local work that lands within a tick or two, so
+// this budget only has to survive a machine that is busy or throttled. A 1.5s
+// race here failed once in a full-suite run and passed in isolation.
+const SERVER_ABORT_BUDGET_MS = 10_000;
+
+/**
+ * Awaits `promise`, rejecting with `timeoutMessage` only if it is still
+ * unsettled after `timeoutMs`. The timer is cleared either way, so a prompt
+ * result does not leave the process waiting on the budget.
+ */
+async function settleWithin(promise, timeoutMs, timeoutMessage) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 test('provider request timeout is extended but remains bounded', () => {
@@ -279,9 +300,14 @@ test('postJson aborts a delayed coach message once its finite deadline elapses',
     ),
     /timed out after 50ms: POST \/session\/message/i,
   );
-  assert.equal(
-    await Promise.race([serverObservedAbort, waitFor(1500).then(() => false)]),
-    true,
+  // The rejection above is the client's own deadline; this is the proof that
+  // the deadline closed the request instead of only abandoning the promise.
+  await settleWithin(
+    serverObservedAbort,
+    SERVER_ABORT_BUDGET_MS,
+    'The server never observed the aborted POST /session/message within '
+      + `${SERVER_ABORT_BUDGET_MS}ms: the client rejected on its deadline `
+      + 'but left the request open.',
   );
 });
 
@@ -426,8 +452,13 @@ test('fetchSSE aborts a delayed coach stream once its finite deadline elapses', 
     },
     /timed out after 50ms: POST \/session\/message\/stream/i,
   );
-  assert.equal(
-    await Promise.race([serverObservedAbort, waitFor(1500).then(() => false)]),
-    true,
+  // Same proof as the POST above, for the streaming lane: the deadline closed
+  // the request on the server, not merely the promise on the client.
+  await settleWithin(
+    serverObservedAbort,
+    SERVER_ABORT_BUDGET_MS,
+    'The server never observed the aborted POST /session/message/stream within '
+      + `${SERVER_ABORT_BUDGET_MS}ms: the client rejected on its deadline `
+      + 'but left the stream open.',
   );
 });

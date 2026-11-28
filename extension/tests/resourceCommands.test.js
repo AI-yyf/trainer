@@ -2252,6 +2252,45 @@ test('browse and ignored admissions stop every resource mutation before it reach
   }
 });
 
+test('admission blocks carry the resource-failure marker so the webview keeps the real reason', async () => {
+  // The webview replaces unmarked host prose with a generic recovery message. A blocked
+  // resource mutation must therefore arrive marked, or "choose how Trainer manages this
+  // project" turns into "the import did not finish; refresh to retry".
+  const vscodeMock = {};
+  const { uploadResourceCommand } = loadWithVscodeMock(resourceCommandsModulePath, vscodeMock);
+  const marker = '[[trainer-resource-failure]] ';
+
+  const expected = {
+    browse: /browse-only.*cannot add, index, or change/i,
+    ignored: /ignored.*will not add or change resources/i,
+    'project-found': /project|choose|learning folder|admission/i,
+  };
+  for (const [status, pattern] of Object.entries(expected)) {
+    const context = createContext();
+    setResourceAdmission(context, status);
+    context.getHostState().bootstrap.memory.workspace.responseLanguage = 'en-US';
+    context.trainerWorkspace = {
+      ...context.trainerWorkspace,
+      hasRoot() {
+        return false;
+      },
+    };
+
+    const result = await uploadResourceCommand(context, { mode: 'files' });
+
+    assert.equal(result.ok, false, status);
+    assert.ok(
+      typeof result.message === 'string' && result.message.startsWith(marker),
+      `${status}: expected the marked reason, got ${JSON.stringify(result.message)}`,
+    );
+    assert.match(
+      result.message.slice(marker.length),
+      pattern,
+      `${status}: the marked text should be the specific admission reason`,
+    );
+  }
+});
+
 test('browse and ignored admissions keep resource search available as a read-only operation', async () => {
   const vscodeMock = {};
   const { searchResourcesCommand } = loadWithVscodeMock(resourceCommandsModulePath, vscodeMock);

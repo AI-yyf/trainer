@@ -197,26 +197,26 @@ function resourceMutationAdmissionBlock(context: CommandContext): CommandExecuti
     return undefined;
   }
 
+  // These reasons are curated, localized and path-free. They carry the resource-failure
+  // marker so the webview shows the actual reason: unmarked host prose is replaced there
+  // by a generic recovery message ("the import did not finish; refresh to retry"), which
+  // hides that the learner only has to choose how Trainer manages this project.
+  const blocked = (message: string): CommandExecutionResult => ({
+    ok: false,
+    message: `[[trainer-resource-failure]] ${message}`,
+  });
   const language = resourceResponseLanguage(context);
   if (status === 'browse') {
-    return {
-      ok: false,
-      message: hostCommandCopy(language, 'resourceBrowseOnly'),
-    };
+    return blocked(hostCommandCopy(language, 'resourceBrowseOnly'));
   }
   if (status === 'ignored') {
-    return {
-      ok: false,
-      message: hostCommandCopy(language, 'resourceProjectIgnored'),
-    };
+    return blocked(hostCommandCopy(language, 'resourceProjectIgnored'));
   }
 
-  return {
-    ok: false,
-    message:
-      trainerSessionBlockReason(context) ??
+  return blocked(
+    trainerSessionBlockReason(context) ??
       hostCommandCopy(language, 'resourceChooseAdmissionFallback'),
-  };
+  );
 }
 
 function resourceResponseLanguage(context: CommandContext, explicit?: unknown): ComposerLanguage {

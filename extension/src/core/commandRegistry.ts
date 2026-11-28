@@ -4,6 +4,7 @@ import type { CommandContext } from './commandContext';
 import { COMMAND_IDS } from './constants';
 import { trainerSessionBlockReason } from './runtimeRehydration';
 import type { CommandExecutionResult } from './types';
+import { hostCommandCopy, resolveHostCommandLanguage } from '../commands/hostCommandCopy';
 
 type CommandHandler = (
   context: CommandContext,
@@ -79,6 +80,25 @@ const WORKSPACE_ADMISSION_REQUIRED_COMMAND_IDS = new Set<string>([
   COMMAND_IDS.approveResearchDecision,
 ]);
 
+/** Resource changes name their admission block in resource terms (see workspaceAdmissionGate). */
+const WORKSPACE_ADMISSION_RESOURCE_COMMAND_IDS = new Set<string>([
+  COMMAND_IDS.uploadResource,
+  COMMAND_IDS.indexResources,
+  COMMAND_IDS.deleteResource,
+  COMMAND_IDS.restoreResource,
+  COMMAND_IDS.restoreSandboxPath,
+  COMMAND_IDS.createSandboxFile,
+  COMMAND_IDS.createSandboxDirectory,
+  COMMAND_IDS.renameSandboxPath,
+  COMMAND_IDS.deleteSandboxPath,
+  COMMAND_IDS.deleteSandboxPaths,
+]);
+
+// The webview shows only host copy that carries this marker. Unmarked prose is replaced
+// there by a generic recovery message, such as "the import did not finish; refresh to
+// retry", which hides the actual remedy.
+const RESOURCE_FAILURE_MARKER = '[[trainer-resource-failure]] ';
+
 function workspaceAdmissionGate(
   commandId: string,
   context: CommandContext,
@@ -88,7 +108,27 @@ function workspaceAdmissionGate(
   }
 
   const blockReason = trainerSessionBlockReason(context);
-  return blockReason ? { ok: false, message: blockReason } : undefined;
+  if (!blockReason) {
+    return undefined;
+  }
+  if (!WORKSPACE_ADMISSION_RESOURCE_COMMAND_IDS.has(commandId)) {
+    return { ok: false, message: blockReason };
+  }
+
+  // "Choose a Trainer workspace before starting a conversation" is the wrong remedy to
+  // show for an import or a delete: say why a resource change is blocked, and mark the
+  // copy so that reason reaches the learner.
+  const status = context.getHostState().bootstrap.memory?.workspace?.trainerWorkspace?.status;
+  const language = resolveHostCommandLanguage(context);
+  const reason =
+    status === 'browse'
+      ? hostCommandCopy(language, 'resourceBrowseOnly')
+      : status === 'ignored'
+        ? hostCommandCopy(language, 'resourceProjectIgnored')
+        : status === 'project-found'
+          ? blockReason
+          : hostCommandCopy(language, 'resourceChooseAdmissionFallback');
+  return { ok: false, message: `${RESOURCE_FAILURE_MARKER}${reason}` };
 }
 
 export class CommandRegistry implements vscode.Disposable {
@@ -118,7 +158,10 @@ export class CommandRegistry implements vscode.Disposable {
       // invocation has no caller to read the return value. Without this the
       // command failed silently and the only trace was the output channel.
       if (result && result.ok === false && result.surfaced !== true && !result.cancelled) {
-        const message = (result.message ?? '').trim() || 'Trainer could not complete that command.';
+        // A palette or shortcut invocation has no webview to strip protocol markers.
+        const message =
+          (result.message ?? '').replace(RESOURCE_FAILURE_MARKER, '').trim() ||
+          'Trainer could not complete that command.';
         void vscode.window?.showWarningMessage?.(`Trainer: ${message}`);
       }
       return result;

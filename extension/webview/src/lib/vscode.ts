@@ -526,6 +526,17 @@ export function subscribeToHostMessages(
   const deliver = (value: unknown) => {
     const parsed = hostMessageSchema.safeParse(value);
     if (!parsed.success) {
+      // Still dropped, but no longer silently: the two incidents recorded at
+      // the library/folders and library/migration entries above left nothing
+      // in the console to say a host answer had been discarded here. Only the
+      // type and the failing field paths are logged, never the payload.
+      console.warn(
+        "[trainer] dropped a host message that failed validation",
+        "type:",
+        value && typeof value === "object" ? (value as { type?: unknown }).type : typeof value,
+        "issues:",
+        parsed.error.issues.map((issue) => issue.path.join(".")),
+      );
       return;
     }
     const raw = value && typeof value === "object" ? value as Record<string, unknown> : {};

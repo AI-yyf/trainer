@@ -27,6 +27,40 @@ const WEBVIEW_STATE_STORAGE_KEY = "trainer:sidepanel:webviewState";
 const SESSION_STORAGE_KEY = "trainer.sidepanel.session";
 const HOST_DEEP_LINK_BASE = "vscode://local.trainer-extension/";
 
+/**
+ * Failure copy for a training/evidence command that has no browser lane.
+ * Nothing was persisted, so the acknowledgement must say so: the webview
+ * resolves a `training/persistenceAck` with `ok: true` straight into the
+ * learner's next step, which would show progress that no server state backs
+ * (product-contract §6 "evidence must be real", §9 "no fake completion").
+ * A plain string like the "Not connected" failure, because the webview
+ * surfaces a persistence rejection's message to the learner.
+ */
+const UNSUPPORTED_TRAINING_COMMAND_MESSAGE =
+  "Not available in the browser side panel; nothing was saved.";
+
+/**
+ * Action types the side panel leaves unanswered on purpose. Each one is a
+ * receipt, a diagnostic, or a UI preference that the webview posts without
+ * waiting for a reply — the lifecycle set the VS Code host also resolves to no
+ * command (`extension/src/core/webviewCommandRouting.ts`), plus the
+ * model-list prefetch, whose outcome the host never reports either.
+ * Anything else that reaches the end of `dispatchAction` is a request the
+ * learner is waiting on, so it answers with an explicit failure rather than
+ * being dropped.
+ */
+const UNANSWERED_ACTION_TYPES: ReadonlySet<string> = new Set([
+  "state/ack",
+  "ui/coachDraftPrefillApplied",
+  "provider/cancelTest",
+  "debug/error",
+  "debug/visibleFacts",
+  "ui/liveFollow",
+  "ui/focus",
+  "ui/collapseToSidebar",
+  "settings/primeProviderModels",
+]);
+
 const AUTH_KEYS = {
   baseUrl: "trainerCapture.baseUrl",
   credential: "trainerCapture.credential",
@@ -99,6 +133,29 @@ function isHttpUrl(url: string | undefined): url is string {
   } catch {
     return false;
   }
+}
+
+/**
+ * The id the webview is waiting to have acknowledged. `requestTrainingPersistence`
+ * stamps it on every durable training command, whatever the command's prefix,
+ * and holds the caller's promise open until a `training/persistenceAck` carrying
+ * it arrives — so a command that has one must always be answered that way.
+ */
+function trainingPersistenceRequestId(rawPayload: Record<string, unknown>): string | undefined {
+  const value = rawPayload.__trainerTrainingPersistenceId;
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function isTrainingPersistenceCommand(commandId: string, rawPayload: Record<string, unknown>): boolean {
+  return (
+    commandId.startsWith("trainer.training.") ||
+    commandId.startsWith("trainer.evidence.") ||
+    trainingPersistenceRequestId(rawPayload) !== undefined
+  );
+}
+
+function unsupportedCommandMessage(commandId: string): string {
+  return `Command is not available in the browser side panel: ${commandId}`;
 }
 
 async function storageGet(defaults: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -792,9 +849,7 @@ export function createChromeSidePanelTransport(
     rawPayload: Record<string, unknown>,
   ): Promise<void> => {
     const requestId =
-      typeof rawPayload.__trainerTrainingPersistenceId === "string"
-        ? rawPayload.__trainerTrainingPersistenceId
-        : `training-${Date.now()}`;
+      trainingPersistenceRequestId(rawPayload) ?? `training-${Date.now()}`;
     if (!currentAuth) {
       emitHostMessage({
         type: "training/persistenceAck",
@@ -838,10 +893,18 @@ export function createChromeSidePanelTransport(
       };
     }
 
+    // The only `ok: true` this channel ever emits comes from the server
+    // response below. A command without a browser lane was not sent anywhere,
+    // so it is answered as a failure — never as a saved acknowledgement.
     if (!lanePath) {
       emitHostMessage({
         type: "training/persistenceAck",
-        payload: { requestId, commandId, ok: true },
+        payload: {
+          requestId,
+          commandId,
+          ok: false,
+          message: UNSUPPORTED_TRAINING_COMMAND_MESSAGE,
+        },
       });
       return;
     }
@@ -881,12 +944,26 @@ export function createChromeSidePanelTransport(
     }
   };
 
-  const handleCommandExecute = async (commandId: string, rawPayload: unknown): Promise<void> => {
+  const emitUnsupportedCommandStatus = (target: string): void => {
+    emitHostMessage({
+      type: "operation/status",
+      payload: { tone: "error", message: unsupportedCommandMessage(target) },
+    });
+  };
+
+  const handleCommandExecute = async (commandId: unknown, rawPayload: unknown): Promise<void> => {
     const payload =
       rawPayload && typeof rawPayload === "object"
         ? (rawPayload as Record<string, unknown>)
         : {};
     const language = resolveCurrentLanguage(persistedState);
+
+    if (typeof commandId !== "string" || !commandId) {
+      emitUnsupportedCommandStatus(
+        typeof commandId === "string" ? commandId : `<${typeof commandId}>`,
+      );
+      return;
+    }
 
     if (commandId === trainerCommands.listCoachSessions || commandId === "trainer.session.list") {
       const { auth } = await loadPairedAuth(true);
@@ -928,7 +1005,24 @@ export function createChromeSidePanelTransport(
     if (commandId === trainerCommands.searchResources) {
       const operationId = String(payload.__trainerResourceOperationId ?? payload.requestId ?? `search-${Date.now()}`);
       const query = String(payload.query ?? "").trim();
-      if (!currentAuth || !query) {
+      // The webview holds a search open until a status carrying this marker
+      // settles it, so every outcome has to answer. A search that never ran
+      // is a failed search, not a silent one.
+      const emitSearchStatus = (tone: "success" | "error", message: string) => {
+        emitHostMessage({
+          type: "operation/status",
+          payload: {
+            tone,
+            message: `[[trainer-resource-operation:search:${operationId}]] ${message}`,
+          },
+        });
+      };
+      if (!currentAuth) {
+        emitSearchStatus("error", "Not connected");
+        return;
+      }
+      if (!query) {
+        emitSearchStatus("error", "Search query is empty");
         return;
       }
       const response = await doFetch(`${currentAuth.baseUrl}/browser/chat/resource/search`, {
@@ -943,30 +1037,29 @@ export function createChromeSidePanelTransport(
           top_k: typeof payload.topK === "number" ? payload.topK : 10,
         }),
       }).catch(() => null);
-      if (response?.ok) {
-        const result = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-        const hitsRaw = Array.isArray(result.hits) ? result.hits : [];
-        const resourceSearch: ResourceSearchState = {
-          requestId: operationId,
-          workspaceId: currentAuth.workspaceId,
-          query,
-          total: typeof result.total === "number" ? result.total : hitsRaw.length,
-          filters: {},
-          hits: hitsRaw as ResourceDetailRecord[],
-        };
-        emitHostMessage({
-          type: "state/patch",
-          sync: nextSyncEnvelope(currentAuth.workspaceId, activeSessionId || "default"),
-          payload: { resourceSearch },
-        });
-        emitHostMessage({
-          type: "operation/status",
-          payload: {
-            tone: "success",
-            message: `[[trainer-resource-operation:search:${operationId}]] OK`,
-          },
-        });
+      if (!response?.ok) {
+        emitSearchStatus(
+          "error",
+          response ? `Resource search failed (HTTP ${response.status})` : "Resource search failed",
+        );
+        return;
       }
+      const result = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      const hitsRaw = Array.isArray(result.hits) ? result.hits : [];
+      const resourceSearch: ResourceSearchState = {
+        requestId: operationId,
+        workspaceId: currentAuth.workspaceId,
+        query,
+        total: typeof result.total === "number" ? result.total : hitsRaw.length,
+        filters: {},
+        hits: hitsRaw as ResourceDetailRecord[],
+      };
+      emitHostMessage({
+        type: "state/patch",
+        sync: nextSyncEnvelope(currentAuth.workspaceId, activeSessionId || "default"),
+        payload: { resourceSearch },
+      });
+      emitSearchStatus("success", "OK");
       return;
     }
 
@@ -1017,7 +1110,7 @@ export function createChromeSidePanelTransport(
       return;
     }
 
-    if (commandId.startsWith("trainer.training.") || commandId.startsWith("trainer.evidence.")) {
+    if (isTrainingPersistenceCommand(commandId, payload)) {
       await handleTrainingCommand(commandId, payload);
       return;
     }
@@ -1035,7 +1128,12 @@ export function createChromeSidePanelTransport(
           message: (SIDEPANEL_BRIDGE_COPY[language] ?? SIDEPANEL_BRIDGE_COPY["en-US"]).openedSettingsInVsCode,
         },
       });
+      return;
     }
+
+    // No browser implementation exists for this command. The webview reads
+    // silence as "still pending", so the honest answer is an explicit failure.
+    emitUnsupportedCommandStatus(commandId);
   };
 
   const dispatchAction = async (rawMessage: unknown): Promise<void> => {
@@ -1061,8 +1159,8 @@ export function createChromeSidePanelTransport(
         );
         return;
       case "command/execute": {
-        const cmd = (action as { payload: { commandId: string; payload?: unknown } }).payload;
-        await handleCommandExecute(cmd.commandId, cmd.payload);
+        const cmd = (action as { payload?: { commandId?: unknown; payload?: unknown } }).payload;
+        await handleCommandExecute(cmd?.commandId, cmd?.payload);
         return;
       }
       case "resource/upload": {
@@ -1084,6 +1182,12 @@ export function createChromeSidePanelTransport(
         return;
       }
       default:
+        // Receipts and diagnostics need no answer; a request this transport
+        // has no handler for does, so it fails out loud instead of vanishing.
+        if (UNANSWERED_ACTION_TYPES.has(action.type)) {
+          return;
+        }
+        emitUnsupportedCommandStatus(action.type);
         return;
     }
   };
