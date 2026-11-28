@@ -153,6 +153,7 @@ _EN_IMPERATIVE_CUES = frozenset(
 )
 _EN_LEADING_FILLERS = ("now,", "then,", "next,", "and ", "finally,", "now ", "then ", "next ")
 _LIST_MARKER = re.compile(r"^(?:[-*+]|\d+[.)])\s+")
+_COACH_NARRATION = re.compile(r"先(?:透露|说明|提醒|强调|声明|澄清|指出|交待|交代|说一句|说清楚|补充一句|确认一下)")
 
 
 def _closing_prose_paragraph(content: str) -> str:
@@ -193,15 +194,26 @@ def _closing_prose_paragraph(content: str) -> str:
 def _reads_as_instruction(text: str) -> bool:
     if not text:
         return False
-    head = text[:12]
-    if any(cue in head for cue in _ZH_IMPERATIVE_CUES):
+    # What the coach does first ("顺带说一句，先透露一个前提") is narration, not a step for the learner.
+    head = _COACH_NARRATION.sub("", text[:40])[:12]
+    # "别" is not looked for inside the opening words: it also sits inside "差别", "分别", "识别".
+    if any(cue in head for cue in _ZH_IMPERATIVE_CUES if cue != "别"):
         return True
     lowered = text.lower()
     for filler in _EN_LEADING_FILLERS:
         if lowered.startswith(filler):
             lowered = lowered[len(filler):].lstrip()
     first = re.split(r"[^a-z]+", lowered, maxsplit=1)[0]
-    return first in _EN_IMPERATIVE_CUES
+    if first in _EN_IMPERATIVE_CUES:
+        return True
+    # An instruction may follow a lead-in inside the sentence — "提示：和 payments.py 一样，先让
+    # `refund()` …" — so a clause that opens with "先" or "请" counts. Only those two: a clause that
+    # opens with a verb is often a noun phrase ("验证用的代码我放在沙箱里跑"). What the coach does
+    # first ("先透露一个前提", "先说明…") is narration, not a step for the learner.
+    return any(
+        clause.strip().startswith(("先", "请")) and not _COACH_NARRATION.match(clause.strip())
+        for clause in re.split(r"[，,；;：:。]", text)
+    )
 
 
 def closing_action_step(content: str) -> str:

@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import re
 
+import pytest
+
 from app.core.model_domains.foundations_and_provider import ProviderConfig, UserProfile
 from app.llm.agent_loop import _build_completion_continuity
 from app.llm.coaching_replies import _agentic_completion_continuity
@@ -288,3 +290,35 @@ def test_a_pronoun_fragment_is_not_an_anchor_of_the_learner_s_request() -> None:
 
     assert "refunds.py" in terms
     assert all(not re.match(r"^(我|你|他|她|它|我们|你们|在|的)", term) for term in terms), terms
+
+
+ONE_LINE_HINT = (
+    "提示：和 payments.py 一样，先让 `refund()` 有可能在写入 `REFUNDED` 之后抛 `TimeoutError`，"
+    "你才能看到重试是否产生了重复退款。"
+)
+
+
+def test_a_one_line_hint_is_the_next_step_even_when_its_instruction_follows_a_lead_in() -> None:
+    """Seen with a real model (2026-11-28, the story's Thursday turn, twice): the reply was one
+    sentence whose instruction follows "提示：和 payments.py 一样，". It did not read as an
+    instruction, and the stored next step fell back to the generic template ("围绕 … 先在 … 里
+    查看 …") while the coach's own hint sat right there."""
+    assert closing_action_step(ONE_LINE_HINT) == ONE_LINE_HINT
+    _summary, next_step = _build_completion_continuity(ONE_LINE_HINT, context=None, response_language="zh-CN")
+
+    assert next_step == ONE_LINE_HINT
+
+
+@pytest.mark.parametrize(
+    "closing",
+    [
+        "`d[k]` 抛出 `KeyError` 是因为键不存在。",
+        "这意味着缺键被当作程序员错误。",
+        "差别在于退款允许同一笔订单分多次退，所以键的粒度要更细。",
+        "你的判断成立，但定义有一个地方需要拧紧一下。",
+        "顺带说一句，先透露一个不影响你思考的小前提：这一轮我不会写进 `payments.py`，验证用的代码我放在沙箱里跑。",
+    ],
+)
+def test_an_explanation_is_still_not_an_instruction(closing: str) -> None:
+    """The last one is the coach narrating what it does first, not a step for the learner."""
+    assert closing_action_step(closing) == ""
