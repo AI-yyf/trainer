@@ -713,8 +713,13 @@ async def _run_matrix() -> dict[str, Any]:
             )
 
             # 12. Static byte-0 coaching prompt prefix invariance
+            # The prefix is built from the profile and the reply language alone: nothing about the
+            # message, the active view or the context tier may move its first byte. The reply
+            # language is part of that prefix (it moved ahead of the learner profile so a provider's
+            # cache also covers it within a session); the languages still share every rule.
             profile = UserProfile(long_term_goal="Master distributed systems", teaching_style="guided")
-            static_prefix = build_static_coaching_prefix(profile)
+            static_prefix_a = build_static_coaching_prefix(profile, "zh-CN")
+            static_prefix_b = build_static_coaching_prefix(profile, "en-US")
             msgs_a = build_coaching_messages(
                 profile=profile,
                 message="Explain Raft log replication",
@@ -729,15 +734,21 @@ async def _run_matrix() -> dict[str, Any]:
             )
             sys_a = str(msgs_a[0]["content"])
             sys_b = str(msgs_b[0]["content"])
+            shared_rules_chars = len(os.path.commonprefix([static_prefix_a, static_prefix_b]))
             prefix_locked = (
-                len(static_prefix) > 10_000
-                and sys_a.startswith(static_prefix)
-                and sys_b.startswith(static_prefix)
+                len(static_prefix_a) > 10_000
+                and len(static_prefix_b) > 10_000
+                and shared_rules_chars > 10_000
+                and sys_a.startswith(static_prefix_a)
+                and sys_b.startswith(static_prefix_b)
             )
             record(
                 "12_static_kv_cache_prefix_invariance",
                 prefix_locked,
-                {"static_prefix_chars": len(static_prefix)},
+                {
+                    "static_prefix_chars": [len(static_prefix_a), len(static_prefix_b)],
+                    "shared_rules_chars": shared_rules_chars,
+                },
             )
 
     passed = [s for s in scenarios if s["status"] == "passed"]

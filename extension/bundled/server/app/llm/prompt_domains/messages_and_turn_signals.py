@@ -7,7 +7,9 @@ from ...workspace.classifier import is_code_like_current_file
 from ..library_practice import library_practice_requested
 from .templates_and_system import (
     COACHING_SYSTEM_TEMPLATE,
+    LEARNER_PROFILE_BLOCK,
     MINIMAL_COACHING_SYSTEM_TEMPLATE,
+    MINIMAL_LEARNER_PROFILE_BLOCK,
     _agent_loop_core_instructions,
     _answer_policy_instruction,
     _answer_policy_label,
@@ -210,27 +212,48 @@ def build_static_coaching_prefix(
     use_minimal_template: bool = False,
     agent_loop_enabled: bool = False,
 ) -> str:
-    """Build the session-invariant system prompt prefix placed at byte 0 for KV caching."""
+    """Build the system prompt shared by a session's turns, ordered for a provider prefix cache.
+
+    What never changes within a session comes first — the coaching rules, the request priority, the
+    tool instructions and the reply language — so a provider can reuse it on every call. The learner
+    profile and the per-turn biases follow: the pedagogy service adapts the goal, the teaching style
+    and the answer policy between turns, so material that depends on them must not sit at byte 0.
+    """
     raw_answer_policy = answer_mode or profile.answer_policy
     answer_policy = _answer_policy_label(raw_answer_policy)
     teaching_style = _teaching_style_label(profile.teaching_style)
+    profile_fields = {
+        "goal": profile.long_term_goal or "Not specified",
+        "background": profile.background or "Not specified",
+        "weekly_hours": profile.weekly_hours,
+        "teaching_style": teaching_style,
+        "answer_policy": answer_policy,
+        "target_project": profile.target_project or "Not specified",
+        "libraries": ", ".join(profile.preferred_libraries) if profile.preferred_libraries else "None specified",
+    }
     template = (
         MINIMAL_COACHING_SYSTEM_TEMPLATE if use_minimal_template else COACHING_SYSTEM_TEMPLATE
     )
-    prefix = template.format(
-        goal=profile.long_term_goal or "Not specified",
-        background=profile.background or "Not specified",
-        weekly_hours=profile.weekly_hours,
-        teaching_style=teaching_style,
-        answer_policy=answer_policy,
-        target_project=profile.target_project or "Not specified",
-        libraries=", ".join(profile.preferred_libraries) if profile.preferred_libraries else "None specified",
-    )
+    prefix = template.format(**profile_fields)
     if use_minimal_template and str(response_language or "").strip().lower().startswith("zh"):
         prefix += (
             "\n- 中文回答严禁使用空洞垫词与套话（“大家都知道”“众所周知”“显然”“其实很简单”"
             "“换句话说”“接下来我们来看一下”“非常巧妙”“代入即得”“希望对你有帮助”）。\n"
         )
+    # Session-invariant part.
+    prefix += (
+        "\n\n## Request Priority\n"
+        "- The learner's explicit question, requested format, requested length, and requested directness override generic coaching habits.\n"
+        "- For a factual or conceptual question, answer the question before offering a plan, lane choice, training card, or follow-up.\n"
+        "- Do not add a generic next action when the requested answer is already complete."
+    )
+    if agent_loop_enabled:
+        prefix += _agent_loop_core_instructions()
+    if response_language:
+        prefix += f"\n\n## Language\n{_language_instruction(response_language)}"
+    # Session- and turn-scoped part.
+    profile_block = MINIMAL_LEARNER_PROFILE_BLOCK if use_minimal_template else LEARNER_PROFILE_BLOCK
+    prefix += "\n\n" + profile_block.format(**profile_fields)
     prefix += (
         "\n\n## Teaching Style Bias\n"
         f"- Active style: {teaching_style}\n"
@@ -243,12 +266,6 @@ def build_static_coaching_prefix(
     )
     if answer_policy == "guided":
         prefix += f"\n{_guided_mode_requirements(response_language)}"
-    prefix += (
-        "\n\n## Request Priority\n"
-        "- The learner's explicit question, requested format, requested length, and requested directness override generic coaching habits.\n"
-        "- For a factual or conceptual question, answer the question before offering a plan, lane choice, training card, or follow-up.\n"
-        "- Do not add a generic next action when the requested answer is already complete."
-    )
     if not minimal_context:
         prefix += (
             "\n\n## Teaching Method\n"
@@ -259,10 +276,6 @@ def build_static_coaching_prefix(
             "- Treat each code block as the implementation of the concepts just built: say which gap it closes and what state it maintains before walking the syntax, and refer each part back to the concept it realizes.\n"
             "- Every 2-3 new ideas, briefly recycle the state so the learner knows what is already known, what is still missing, and what proof comes next."
         )
-    if agent_loop_enabled:
-        prefix += _agent_loop_core_instructions()
-    if response_language:
-        prefix += f"\n\n## Language\n{_language_instruction(response_language)}"
     return prefix
 
 

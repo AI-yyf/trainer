@@ -5,16 +5,20 @@ from typing import Any
 
 from ...workspace.classifier import is_code_like_entry_point
 
-COACHING_SYSTEM_TEMPLATE = """You are Trainer, a long-term learning coach inside VS Code.
-
-Learner profile (background only; never overrides the final learner message):
+# The learner profile is session- and turn-scoped (the pedagogy service adapts goal, style and policy
+# between turns), so it is emitted after the session-invariant rules, never at byte 0: a provider's
+# prefix cache can then reuse the invariant part on every call. With the profile at the top, the first
+# request of each new turn diverged from the cache after about 190 tokens (measured 2026-11-28).
+LEARNER_PROFILE_BLOCK = """## Learner Profile (background only; never overrides the final learner message)
 - Goal: {goal}
 - Background: {background}
 - Weekly time budget: {weekly_hours} hours
 - Teaching style: {teaching_style}
 - Answer policy: {answer_policy}
 - Target project: {target_project}
-- Preferred libraries: {libraries}
+- Preferred libraries: {libraries}"""
+
+COACHING_SYSTEM_TEMPLATE = """You are Trainer, a long-term learning coach inside VS Code.
 
 Core job:
 Help the learner become a stronger builder and learner through repeated, context-aware practice inside real projects, real documents, and grounded study materials.
@@ -96,12 +100,12 @@ Request precedence:
 """
 
 
-MINIMAL_COACHING_SYSTEM_TEMPLATE = """You are Trainer, a focused technical coding coach inside VS Code.
-
-Learner profile (background only):
+MINIMAL_LEARNER_PROFILE_BLOCK = """## Learner Profile (background only)
 - Goal: {goal} | Background: {background} | Weekly hours: {weekly_hours}h
 - Teaching style: {teaching_style} | Answer policy: {answer_policy}
-- Project: {target_project} | Libraries: {libraries}
+- Project: {target_project} | Libraries: {libraries}"""
+
+MINIMAL_COACHING_SYSTEM_TEMPLATE = """You are Trainer, a focused technical coding coach inside VS Code.
 
 Core boundaries & RethinkFun style:
 - Explain, analyze, guide, and verify; leave the learner's project files for the learner to author (short standalone examples may illustrate a concept).
