@@ -4,12 +4,13 @@ import asyncio
 import json
 from hashlib import sha256
 from types import SimpleNamespace
+from typing import TypedDict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 
-from app.core.models import ProviderConfig, UserProfile
+from app.core.models import CapabilityFlags, ProviderConfig, ProviderProtocol, UserProfile
 from app.llm.agent_loop import CoachAgentLoop
 from app.llm.coaching_replies import (
     _agentic_practice_completion_guard,
@@ -46,10 +47,11 @@ from app.llm.provider_service import (
     _visible_model_text,
     redact_provider_error,
 )
+from app.llm.tools import ToolContext
 
 
 def _make_profile(**overrides: object) -> UserProfile:
-    defaults = {
+    defaults: dict[str, object] = {
         "long_term_goal": "Build a FastAPI trainer",
         "background": "Intermediate Python developer",
         "weekly_hours": 6,
@@ -58,7 +60,7 @@ def _make_profile(**overrides: object) -> UserProfile:
         "preferred_libraries": ["fastapi", "pytest"],
     }
     defaults.update(overrides)
-    return UserProfile(**defaults)  # type: ignore[arg-type]
+    return UserProfile.model_validate(defaults)
 
 
 def _chat_completion_user_text(kwargs: dict[str, object]) -> str:
@@ -94,8 +96,8 @@ def _provider_test_reply_for_prompt(last_user: str, primary_reply: str) -> str:
 def _make_config() -> ProviderConfig:
     return ProviderConfig(
         name="test-provider",
-        base_url="https://api.openai.com/v1",
-        api_key_ref="trainer.test",
+        baseUrl="https://api.openai.com/v1",
+        apiKeyRef="trainer.test",
         model="gpt-4o-mini",
     )
 
@@ -103,6 +105,27 @@ def _make_config() -> ProviderConfig:
 async def _unused_native_stream(*_args: object, **_kwargs: object):
     if False:
         yield {}
+
+
+class _AgentLoopCapture(TypedDict, total=False):
+    """What a fake ``CoachAgentLoop`` records about how it was built and run."""
+
+    provider: object
+    registry: object
+    context: ToolContext
+    max_steps: int
+    messages: list[dict[str, object]]
+    build_messages_kwargs: dict[str, object]
+
+
+class _AsyncOpenAICtorCapture(TypedDict, total=False):
+    """What a patched async OpenAI client constructor records."""
+
+    request: dict[str, object]
+    api_key: str
+    base_url: str | None
+    timeout: httpx.Timeout
+    max_retries: int
 
 
 def test_redact_provider_error_removes_credentials_and_upstream_bodies() -> None:
@@ -273,10 +296,10 @@ def test_provider_test_returns_failure_when_model_is_not_supported() -> None:
 def test_provider_test_applies_passed_provider_request_defaults_without_self_config() -> None:
     config = ProviderConfig(
         name="minimax-provider",
-        base_url="https://api.example.com/v1",
-        api_key_ref="trainer.minimax",
+        baseUrl="https://api.example.com/v1",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
-        request_defaults={
+        requestDefaults={
             "extra_body": {
                 "thinking": {
                     "type": "disabled"
@@ -328,8 +351,8 @@ def test_provider_test_applies_passed_provider_request_defaults_without_self_con
 def test_provider_test_openai_compatible_probe_matches_response_language() -> None:
     config = ProviderConfig(
         name="minimax-provider",
-        base_url="https://api.example.com/v1",
-        api_key_ref="trainer.minimax",
+        baseUrl="https://api.example.com/v1",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
         protocol="openai_chat_completions_compatible",
     )
@@ -386,8 +409,8 @@ def test_native_provider_probe_prompts_are_readable_and_language_aware() -> None
 def test_provider_test_flags_question_mark_language_corruption_as_unusable_reply() -> None:
     config = ProviderConfig(
         name="minimax-provider",
-        base_url="https://api.example.com/v1",
-        api_key_ref="trainer.minimax",
+        baseUrl="https://api.example.com/v1",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
     )
     service = ProviderService()
@@ -421,8 +444,8 @@ def test_provider_test_flags_question_mark_language_corruption_as_unusable_reply
 def test_provider_test_accepts_natural_zh_probe_when_exact_echo_is_unstable() -> None:
     config = ProviderConfig(
         name="minimax-provider",
-        base_url="https://api.example.com/v1",
-        api_key_ref="trainer.minimax",
+        baseUrl="https://api.example.com/v1",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
     )
     service = ProviderService()
@@ -462,8 +485,8 @@ def test_provider_test_accepts_natural_zh_probe_when_exact_echo_is_unstable() ->
 def test_provider_test_retries_blank_chat_probe_before_reporting_empty_response() -> None:
     config = ProviderConfig(
         name="minimax-provider",
-        base_url="https://api.example.com/v1",
-        api_key_ref="trainer.minimax",
+        baseUrl="https://api.example.com/v1",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
     )
     service = ProviderService()
@@ -505,8 +528,8 @@ def test_provider_test_escalates_the_probe_budget_after_a_blank_reasoning_probe(
     as unusable."""
     config = ProviderConfig(
         name="linksub",
-        base_url="https://linksub.fun/v1",
-        api_key_ref="trainer.linksub",
+        baseUrl="https://linksub.fun/v1",
+        apiKeyRef="trainer.linksub",
         model="deepseek-v4.1-flash",
     )
     service = ProviderService()
@@ -516,7 +539,9 @@ def test_provider_test_escalates_the_probe_budget_after_a_blank_reasoning_probe(
 
     def completion_side_effect(*, messages: list[dict[str, str]], **kwargs: object):
         nonlocal compact_attempts
-        budgets.append(kwargs.get("max_tokens"))
+        max_tokens = kwargs.get("max_tokens")
+        assert max_tokens is None or isinstance(max_tokens, int)
+        budgets.append(max_tokens)
         last_user = messages[-1]["content"]
         mock_choice = MagicMock()
         if "只返回一个可见中文短句：provider ready。" in last_user:
@@ -541,8 +566,8 @@ def test_provider_test_escalates_the_probe_budget_after_a_blank_reasoning_probe(
 def test_provider_test_keeps_a_trusted_visible_reply_when_language_probe_is_inconclusive() -> None:
     config = ProviderConfig(
         name="minimax-provider",
-        base_url="https://api.example.com/v1",
-        api_key_ref="trainer.minimax",
+        baseUrl="https://api.example.com/v1",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
     )
     service = ProviderService()
@@ -575,8 +600,8 @@ def test_provider_test_keeps_a_trusted_visible_reply_when_language_probe_is_inco
 def test_provider_test_uses_message_derived_probe_for_real_coach_message() -> None:
     config = ProviderConfig(
         name="minimax-provider",
-        base_url="https://api.example.com/v1",
-        api_key_ref="trainer.minimax",
+        baseUrl="https://api.example.com/v1",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
     )
     service = ProviderService()
@@ -628,14 +653,14 @@ def test_provider_test_uses_message_derived_probe_for_real_coach_message() -> No
 def test_provider_test_skips_cjk_probe_for_english_only_flow() -> None:
     config = ProviderConfig(
         name="minimax-provider",
-        base_url="https://api.example.com/v1",
-        api_key_ref="trainer.minimax",
+        baseUrl="https://api.example.com/v1",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
     )
     service = ProviderService()
     fake_client = MagicMock()
 
-    def completion_side_effect(*, messages: list[dict[str, str]], **_: object):
+    def completion_side_effect(*, messages: list[dict[str, str]], **kwargs: object):
         _ = messages[-1]["content"]
         mock_choice = MagicMock()
         mock_choice.message.content = "pong"
@@ -669,11 +694,11 @@ def test_provider_test_skips_cjk_probe_for_english_only_flow() -> None:
 def test_provider_test_uses_native_anthropic_messages_probe() -> None:
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax-gateway.test",
-        api_key_ref="trainer.minimax",
+        baseUrl="http://minimax-gateway.test",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
-        request_defaults={
+        requestDefaults={
             "thinkingBudget": 2048,
             "extra_body": {
                 "gateway_option": "keep-me",
@@ -718,26 +743,26 @@ def test_provider_test_uses_native_anthropic_messages_probe() -> None:
     ],
 )
 def test_native_http_502_is_retryable_upstream_failure(
-    protocol: str,
+    protocol: ProviderProtocol,
     base_url: str,
 ) -> None:
     config = ProviderConfig(
         name=f"{protocol}-gateway",
-        base_url=base_url,
-        api_key_ref="trainer.native",
+        baseUrl=base_url,
+        apiKeyRef="trainer.native",
         model="demo-model",
         protocol=protocol,
-        capabilities={
-            "chat": True,
-            "responses": False,
-            "vision": False,
-            "embeddings": False,
-            "tools": False,
-            "json_schema": False,
-            "structured_output": False,
-            "streaming": False,
-            "thinking": False,
-        },
+        capabilities=CapabilityFlags(
+            chat=True,
+            responses=False,
+            vision=False,
+            embeddings=False,
+            tools=False,
+            jsonSchema=False,
+            structuredOutput=False,
+            streaming=False,
+            thinking=False,
+        ),
     )
     service = ProviderService()
 
@@ -797,8 +822,8 @@ def test_classify_httpx_transport_errors_as_retryable(
 def test_provider_test_retries_native_anthropic_empty_probe_once() -> None:
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax-gateway.test",
-        api_key_ref="trainer.minimax",
+        baseUrl="http://minimax-gateway.test",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
     )
@@ -839,8 +864,8 @@ def test_provider_test_retries_native_anthropic_empty_probe_once() -> None:
 def test_provider_test_classifies_native_anthropic_thinking_only_reply_without_leaking_it() -> None:
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax-gateway.test",
-        api_key_ref="trainer.minimax",
+        baseUrl="http://minimax-gateway.test",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
     )
@@ -873,8 +898,8 @@ def test_provider_test_classifies_native_anthropic_thinking_only_reply_without_l
 def test_provider_test_recovers_native_anthropic_blank_visible_probe_via_language_probe() -> None:
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax-gateway.test",
-        api_key_ref="trainer.minimax",
+        baseUrl="http://minimax-gateway.test",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
     )
@@ -925,11 +950,11 @@ def test_provider_test_recovers_native_anthropic_blank_visible_probe_via_languag
 def test_provider_test_threads_anthropic_probe_request_defaults() -> None:
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax-gateway.test",
-        api_key_ref="trainer.minimax",
+        baseUrl="http://minimax-gateway.test",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
-        request_defaults={"extra_body": {"thinking": {"type": "disabled"}}},
+        requestDefaults={"extra_body": {"thinking": {"type": "disabled"}}},
     )
     service = ProviderService()
 
@@ -959,8 +984,8 @@ def test_provider_test_threads_anthropic_probe_request_defaults() -> None:
 def test_provider_test_native_anthropic_probe_catches_language_corruption() -> None:
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax-gateway.test",
-        api_key_ref="trainer.minimax",
+        baseUrl="http://minimax-gateway.test",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
     )
@@ -1005,8 +1030,8 @@ def test_provider_test_native_anthropic_probe_catches_language_corruption() -> N
 def test_provider_test_native_probe_keeps_visible_reply_when_optional_language_probe_is_inconclusive() -> None:
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax-gateway.test",
-        api_key_ref="trainer.minimax",
+        baseUrl="http://minimax-gateway.test",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
     )
@@ -1051,8 +1076,8 @@ def test_provider_test_native_probe_keeps_visible_reply_when_optional_language_p
 def test_provider_test_native_anthropic_requires_every_language_probe_to_pass() -> None:
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax-gateway.test",
-        api_key_ref="trainer.minimax",
+        baseUrl="http://minimax-gateway.test",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
     )
@@ -1095,8 +1120,8 @@ def test_provider_test_native_anthropic_requires_every_language_probe_to_pass() 
 def test_provider_test_uses_native_openai_responses_probe() -> None:
     config = ProviderConfig(
         name="openai-responses",
-        base_url="https://api.openai.com/v1",
-        api_key_ref="trainer.openai",
+        baseUrl="https://api.openai.com/v1",
+        apiKeyRef="trainer.openai",
         model="gpt-5.1-mini",
         protocol="openai_responses",
     )
@@ -1117,8 +1142,8 @@ def test_provider_test_uses_native_openai_responses_probe() -> None:
 def test_provider_test_classifies_missing_responses_endpoint_as_protocol_mismatch() -> None:
     config = ProviderConfig(
         name="openai-responses",
-        base_url="https://gateway.example.com/v1",
-        api_key_ref="trainer.gateway",
+        baseUrl="https://gateway.example.com/v1",
+        apiKeyRef="trainer.gateway",
         model="MiniMax-M3",
         protocol="openai_responses",
     )
@@ -1142,8 +1167,8 @@ def test_provider_test_classifies_missing_responses_endpoint_as_protocol_mismatc
 def test_provider_test_uses_native_gemini_generate_content_probe() -> None:
     config = ProviderConfig(
         name="gemini",
-        base_url="https://generativelanguage.googleapis.com/v1beta",
-        api_key_ref="trainer.gemini",
+        baseUrl="https://generativelanguage.googleapis.com/v1beta",
+        apiKeyRef="trainer.gemini",
         model="gemini-2.0-flash",
         protocol="gemini_generate_content",
     )
@@ -1176,8 +1201,8 @@ def test_provider_test_uses_native_gemini_generate_content_probe() -> None:
 def test_provider_test_falls_back_for_gemini_compatible_gateway() -> None:
     config = ProviderConfig(
         name="minimax-gemini-compatible",
-        base_url="https://gateway.example.com/v1",
-        api_key_ref="trainer.gateway",
+        baseUrl="https://gateway.example.com/v1",
+        apiKeyRef="trainer.gateway",
         model="MiniMax-M3",
         protocol="gemini_generate_content",
     )
@@ -1204,8 +1229,8 @@ def test_provider_test_falls_back_for_gemini_compatible_gateway() -> None:
 def test_provider_test_appends_v1_for_non_google_gemini_gateway_without_version_path() -> None:
     config = ProviderConfig(
         name="minimax-gemini-compatible",
-        base_url="https://gateway.example.com",
-        api_key_ref="trainer.gateway",
+        baseUrl="https://gateway.example.com",
+        apiKeyRef="trainer.gateway",
         model="MiniMax-M3",
         protocol="gemini_generate_content",
     )
@@ -1255,8 +1280,8 @@ def test_provider_test_appends_v1_for_non_google_gemini_gateway_without_version_
 def test_provider_test_falls_back_to_lowercase_model_candidate() -> None:
     config = ProviderConfig(
         name="mimo-provider",
-        base_url="https://example.com/v1",
-        api_key_ref="trainer.mimo",
+        baseUrl="https://example.com/v1",
+        apiKeyRef="trainer.mimo",
         model="MiMo-V2.5",
     )
     service = ProviderService()
@@ -1286,10 +1311,10 @@ def test_provider_test_falls_back_to_lowercase_model_candidate() -> None:
 async def test_coaching_reply_applies_request_defaults_before_sending() -> None:
     config = ProviderConfig(
         name="minimax-provider",
-        base_url="https://api.example.com/v1",
-        api_key_ref="trainer.minimax",
+        baseUrl="https://api.example.com/v1",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
-        request_defaults={
+        requestDefaults={
             "extra_body": {
                 "thinking": {
                     "type": "disabled"
@@ -1317,11 +1342,11 @@ async def test_coaching_reply_applies_request_defaults_before_sending() -> None:
 async def test_chat_request_defaults_are_protocol_safe() -> None:
     config = ProviderConfig(
         name="minimax-provider",
-        base_url="https://api.example.com/v1",
-        api_key_ref="trainer.minimax",
+        baseUrl="https://api.example.com/v1",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
         protocol="openai_chat_completions_compatible",
-        request_defaults={
+        requestDefaults={
             "extra_body": {"thinking": {"type": "disabled"}},
             "maxOutputTokens": 2048,
             "maxTokens": 1024,
@@ -1364,8 +1389,8 @@ async def test_non_agent_coaching_reply_dispatches_to_configured_native_protocol
 ) -> None:
     config = ProviderConfig(
         name="anthropic-compatible",
-        base_url="http://minimax-gateway.test",
-        api_key_ref="trainer.anthropic",
+        baseUrl="http://minimax-gateway.test",
+        apiKeyRef="trainer.anthropic",
         model="MiniMax-M3",
         protocol="anthropic_messages",
     )
@@ -1424,8 +1449,8 @@ async def test_non_google_anthropic_gateway_falls_back_when_native_reply_is_html
 ) -> None:
     config = ProviderConfig(
         name="anthropic-compatible",
-        base_url="http://minimax-gateway.test",
-        api_key_ref="trainer.anthropic",
+        baseUrl="http://minimax-gateway.test",
+        apiKeyRef="trainer.anthropic",
         model="MiniMax-M3",
         protocol="anthropic_messages",
     )
@@ -1477,8 +1502,8 @@ async def test_non_agent_coaching_stream_dispatches_to_configured_native_protoco
 ) -> None:
     config = ProviderConfig(
         name="gemini",
-        base_url="https://generativelanguage.googleapis.com/v1beta",
-        api_key_ref="trainer.gemini",
+        baseUrl="https://generativelanguage.googleapis.com/v1beta",
+        apiKeyRef="trainer.gemini",
         model="gemini-2.0-flash",
         protocol="gemini_generate_content",
     )
@@ -1586,11 +1611,11 @@ async def test_agent_binding_preserves_openai_compatible_request_defaults() -> N
 
     config = ProviderConfig(
         name="minimax-provider",
-        base_url="https://api.example.com/v1",
-        api_key_ref="trainer.minimax",
+        baseUrl="https://api.example.com/v1",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
         protocol="openai_chat_completions_compatible",
-        request_defaults={
+        requestDefaults={
             "extra_body": {
                 "thinking": {
                     "type": "disabled",
@@ -1642,11 +1667,11 @@ async def test_minimax_direct_sidecar_config_forces_visible_reply_wire_defaults(
 
     config = ProviderConfig(
         name="custom-minimax-gateway",
-        base_url="http://minimax-gateway.test",
-        api_key_ref="trainer.minimax",
+        baseUrl="http://minimax-gateway.test",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
         protocol="openai_chat_completions_compatible",
-        request_defaults={
+        requestDefaults={
             "max_tokens": 256,
             "thinking": {"type": "enabled"},
             "extra_body": {
@@ -1716,8 +1741,8 @@ def test_minimax_undeclared_profile_defaults_to_disabled_thinking() -> None:
     reset_learned_policies()
     config = ProviderConfig(
         name="undeclared-minimax-gateway",
-        base_url="http://minimax-gateway.test",
-        api_key_ref="trainer.minimax",
+        baseUrl="http://minimax-gateway.test",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
         protocol="openai_chat_completions_compatible",
     )
@@ -1744,8 +1769,8 @@ def test_mandatory_thinking_rejection_is_renegotiated_and_remembered() -> None:
     reset_learned_policies()
     config = ProviderConfig(
         name="mandatory-thinking-gateway",
-        base_url="http://minimax-gateway.test",
-        api_key_ref="trainer.minimax",
+        baseUrl="http://minimax-gateway.test",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3.1-Flash-Preview",
         protocol="openai_chat_completions_compatible",
     )
@@ -1827,11 +1852,11 @@ async def test_nonofficial_anthropic_agent_binding_forces_thinking_disabled() ->
 
     config = ProviderConfig(
         name="minimax-anthropic",
-        base_url="http://minimax-gateway.test",
-        api_key_ref="trainer.minimax",
+        baseUrl="http://minimax-gateway.test",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
-        request_defaults={
+        requestDefaults={
             "thinkingBudget": 2048,
             "extra_body": {
                 "gateway_option": "keep-me",
@@ -1861,11 +1886,11 @@ async def test_openai_responses_binding_maps_safe_request_defaults() -> None:
 
     config = ProviderConfig(
         name="openai-responses",
-        base_url="https://api.openai.com/v1",
-        api_key_ref="trainer.openai",
+        baseUrl="https://api.openai.com/v1",
+        apiKeyRef="trainer.openai",
         model="gpt-5.1-mini",
         protocol="openai_responses",
-        request_defaults={
+        requestDefaults={
             "store": False,
             "reasoningEffort": "medium",
             "serviceTier": "auto",
@@ -1899,8 +1924,8 @@ async def test_openai_responses_binding_sends_verified_images_without_changing_t
 
     config = ProviderConfig(
         name="openai-responses-vision",
-        base_url="https://api.openai.com/v1",
-        api_key_ref="trainer.openai",
+        baseUrl="https://api.openai.com/v1",
+        apiKeyRef="trainer.openai",
         model="gpt-4.1-mini",
         protocol="openai_responses",
         capabilities=CapabilityFlags(responses=True, vision=True, tools=True),
@@ -1939,8 +1964,8 @@ async def test_openai_responses_binding_sends_verified_images_without_changing_t
 def test_provider_list_models_returns_sorted_models_and_resolves_alias() -> None:
     config = ProviderConfig(
         name="mimo-provider",
-        base_url="https://example.com/v1",
-        api_key_ref="trainer.mimo",
+        baseUrl="https://example.com/v1",
+        apiKeyRef="trainer.mimo",
         model="MiMo-V2.5",
     )
     service = ProviderService()
@@ -1964,8 +1989,8 @@ def test_provider_list_models_returns_sorted_models_and_resolves_alias() -> None
 def test_provider_list_models_uses_native_anthropic_models_endpoint() -> None:
     config = ProviderConfig(
         name="anthropic",
-        base_url="https://api.anthropic.com",
-        api_key_ref="trainer.anthropic",
+        baseUrl="https://api.anthropic.com",
+        apiKeyRef="trainer.anthropic",
         model="claude-sonnet-4-20250514",
         protocol="anthropic_messages",
     )
@@ -2011,8 +2036,8 @@ def test_provider_list_models_uses_native_anthropic_models_endpoint() -> None:
 def test_provider_list_models_falls_back_to_openai_for_compatible_anthropic_gateway() -> None:
     config = ProviderConfig(
         name="minimax-anthropic-gateway",
-        base_url="http://minimax-gateway.test",
-        api_key_ref="trainer.minimax",
+        baseUrl="http://minimax-gateway.test",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
         protocol="anthropic_messages",
     )
@@ -2055,8 +2080,8 @@ def test_provider_list_models_falls_back_to_openai_for_compatible_anthropic_gate
 def test_provider_list_models_does_not_mark_an_empty_native_response_as_listed() -> None:
     config = ProviderConfig(
         name="anthropic-compatible",
-        base_url="https://gateway.example.com",
-        api_key_ref="trainer.gateway",
+        baseUrl="https://gateway.example.com",
+        apiKeyRef="trainer.gateway",
         model="MiniMax-M3",
         protocol="anthropic_messages",
     )
@@ -2088,8 +2113,8 @@ def test_provider_list_models_does_not_mark_an_empty_native_response_as_listed()
 def test_provider_list_models_uses_native_gemini_models_endpoint() -> None:
     config = ProviderConfig(
         name="gemini",
-        base_url="https://generativelanguage.googleapis.com",
-        api_key_ref="trainer.gemini",
+        baseUrl="https://generativelanguage.googleapis.com",
+        apiKeyRef="trainer.gemini",
         model="gemini-2.0-flash",
         protocol="gemini_generate_content",
     )
@@ -2143,8 +2168,8 @@ def test_provider_list_models_uses_native_gemini_models_endpoint() -> None:
 def test_provider_list_models_extracts_openai_compatible_token_limits_when_exposed() -> None:
     config = ProviderConfig(
         name="minimax-gateway",
-        base_url="https://gateway.example.com/v1",
-        api_key_ref="trainer.gateway",
+        baseUrl="https://gateway.example.com/v1",
+        apiKeyRef="trainer.gateway",
         model="MiniMax-M3",
     )
     service = ProviderService()
@@ -2177,8 +2202,8 @@ def test_provider_list_models_extracts_openai_compatible_token_limits_when_expos
 def test_provider_list_models_falls_back_for_gemini_compatible_gateway() -> None:
     config = ProviderConfig(
         name="minimax-gemini-compatible",
-        base_url="https://gateway.example.com/v1",
-        api_key_ref="trainer.gateway",
+        baseUrl="https://gateway.example.com/v1",
+        apiKeyRef="trainer.gateway",
         model="MiniMax-M3",
         protocol="gemini_generate_content",
     )
@@ -2216,8 +2241,8 @@ def test_provider_list_models_falls_back_for_gemini_compatible_gateway() -> None
 def test_provider_list_models_falls_back_when_gemini_gateway_returns_no_native_models() -> None:
     config = ProviderConfig(
         name="empty-gemini-compatible",
-        base_url="https://gateway.example.com/v1",
-        api_key_ref="trainer.gateway",
+        baseUrl="https://gateway.example.com/v1",
+        apiKeyRef="trainer.gateway",
         model="MiniMax-M3",
         protocol="gemini_generate_content",
     )
@@ -2259,8 +2284,8 @@ def test_provider_list_models_falls_back_when_gemini_gateway_returns_no_native_m
 def test_provider_list_models_keeps_empty_gemini_gateway_fallback_non_ready() -> None:
     config = ProviderConfig(
         name="empty-gemini-compatible",
-        base_url="https://gateway.example.com/v1",
-        api_key_ref="trainer.gateway",
+        baseUrl="https://gateway.example.com/v1",
+        apiKeyRef="trainer.gateway",
         model="MiniMax-M3",
         protocol="gemini_generate_content",
     )
@@ -2337,8 +2362,8 @@ def _httpx_client_context(responses: list[_FakeNativeResponse]) -> MagicMock:
 def test_provider_list_models_follows_anthropic_pagination_until_has_more_is_false() -> None:
     config = ProviderConfig(
         name="anthropic",
-        base_url="https://api.anthropic.com",
-        api_key_ref="trainer.anthropic",
+        baseUrl="https://api.anthropic.com",
+        apiKeyRef="trainer.anthropic",
         model="claude-sonnet-4-20250514",
         protocol="anthropic_messages",
     )
@@ -2400,8 +2425,8 @@ def test_provider_list_models_follows_anthropic_pagination_until_has_more_is_fal
 def test_provider_list_models_keeps_partial_anthropic_catalog_when_a_later_page_fails() -> None:
     config = ProviderConfig(
         name="anthropic",
-        base_url="https://api.anthropic.com",
-        api_key_ref="trainer.anthropic",
+        baseUrl="https://api.anthropic.com",
+        apiKeyRef="trainer.anthropic",
         model="claude-sonnet-4-20250514",
         protocol="anthropic_messages",
     )
@@ -2438,8 +2463,8 @@ def test_provider_list_models_keeps_partial_anthropic_catalog_when_a_later_page_
 def test_provider_list_models_stops_anthropic_pagination_at_the_safety_cap() -> None:
     config = ProviderConfig(
         name="anthropic",
-        base_url="https://api.anthropic.com",
-        api_key_ref="trainer.anthropic",
+        baseUrl="https://api.anthropic.com",
+        apiKeyRef="trainer.anthropic",
         model="claude-sonnet-4-20250514",
         protocol="anthropic_messages",
     )
@@ -2472,8 +2497,8 @@ def test_provider_list_models_stops_anthropic_pagination_at_the_safety_cap() -> 
 def test_provider_list_models_follows_gemini_pagination_until_page_token_exhausted() -> None:
     config = ProviderConfig(
         name="gemini",
-        base_url="https://generativelanguage.googleapis.com",
-        api_key_ref="trainer.gemini",
+        baseUrl="https://generativelanguage.googleapis.com",
+        apiKeyRef="trainer.gemini",
         model="gemini-2.0-flash",
         protocol="gemini_generate_content",
     )
@@ -2530,8 +2555,8 @@ def test_provider_list_models_follows_gemini_pagination_until_page_token_exhaust
 def test_provider_list_models_keeps_partial_gemini_catalog_when_a_later_page_fails() -> None:
     config = ProviderConfig(
         name="gemini",
-        base_url="https://generativelanguage.googleapis.com",
-        api_key_ref="trainer.gemini",
+        baseUrl="https://generativelanguage.googleapis.com",
+        apiKeyRef="trainer.gemini",
         model="gemini-2.0-flash",
         protocol="gemini_generate_content",
     )
@@ -2983,8 +3008,8 @@ def test_agent_prompt_prefers_direct_intake_when_no_evidence_lookup_was_requeste
 def test_nonofficial_anthropic_intake_hides_unneeded_agent_tools() -> None:
     provider = ProviderConfig(
         name="compatibility-gateway",
-        base_url="https://gateway.example/v1",
-        api_key_ref="trainer.compatibility",
+        baseUrl="https://gateway.example/v1",
+        apiKeyRef="trainer.compatibility",
         model="compat-model",
         protocol="anthropic_messages",
     )
@@ -3009,8 +3034,8 @@ def test_nonofficial_anthropic_intake_hides_unneeded_agent_tools() -> None:
 def test_nonofficial_anthropic_intake_keeps_tools_for_resource_grounding() -> None:
     provider = ProviderConfig(
         name="compatibility-gateway",
-        base_url="https://gateway.example/v1",
-        api_key_ref="trainer.compatibility",
+        baseUrl="https://gateway.example/v1",
+        apiKeyRef="trainer.compatibility",
         model="compat-model",
         protocol="anthropic_messages",
     )
@@ -3556,7 +3581,7 @@ def test_build_coaching_messages_can_suppress_history_for_fresh_lane_reanchor() 
 
 def test_current_file_included_in_system_context() -> None:
     profile = _make_profile()
-    current_file = {"path": "main.py", "language_id": "python", "content": "print('hello')"}
+    current_file: dict[str, object] = {"path": "main.py", "language_id": "python", "content": "print('hello')"}
     messages = build_coaching_messages(profile, "Review this", current_file=current_file)
     assert len(messages) == 2
     system_content = messages[0]["content"]
@@ -3568,7 +3593,7 @@ def test_current_file_included_in_system_context() -> None:
 
 def test_build_coaching_messages_ignores_html_preview_current_file_for_function_guidance() -> None:
     profile = _make_profile()
-    current_file = {
+    current_file: dict[str, object] = {
         "path": "index.html",
         "language_id": "html",
         "content": "<!doctype html>\n<html lang=\"en\"><body><script>function renderUser() {}</script></body></html>",
@@ -3686,7 +3711,9 @@ def test_finalize_coaching_reply_blocks_pure_provider_html_shell() -> None:
     assert "<html" not in lowered
     assert "provider" in lowered
     assert "protocol" in lowered
-    assert service.peek_last_reply_failure()["error_category"] == "malformed_response"
+    failure = service.peek_last_reply_failure()
+    assert failure is not None
+    assert failure["error_category"] == "malformed_response"
 
 
 def test_build_coaching_messages_includes_coach_context_block() -> None:
@@ -4141,7 +4168,7 @@ async def test_no_api_key_returns_high_quality_scaffold_reply() -> None:
 async def test_agentic_reply_routes_history_and_loop_mode_into_agent_loop(monkeypatch: pytest.MonkeyPatch) -> None:
     service = ProviderService(config=_make_config(), api_key="sk-test")
     profile = _make_profile()
-    captured: dict[str, object] = {}
+    captured: _AgentLoopCapture = {}
 
     async def _fake_call(_messages: list[dict[str, object]], _tools: list[dict[str, object]] | None) -> dict[str, object]:
         return {"content": "Agentic reply.", "tool_calls": []}
@@ -4149,7 +4176,7 @@ async def test_agentic_reply_routes_history_and_loop_mode_into_agent_loop(monkey
     fake_provider = SimpleNamespace(protocol="openai_chat_completions", call=_fake_call, call_stream=None)
 
     class _FakeLoop:
-        def __init__(self, *, provider: object, registry: object, context: object, max_steps: int) -> None:
+        def __init__(self, *, provider: object, registry: object, context: ToolContext, max_steps: int) -> None:
             captured["provider"] = provider
             captured["registry"] = registry
             captured["context"] = context
@@ -4210,12 +4237,15 @@ async def test_agentic_reply_routes_history_and_loop_mode_into_agent_loop(monkey
     assert reply["confidence"] == "high"
     assert reply["evidence"] == ["tool result A", "tool result B"]
     assert reply["fell_back"] is False
+    assert "build_messages_kwargs" in captured
     assert captured["build_messages_kwargs"]["agent_loop_enabled"] is True
     assert captured["build_messages_kwargs"]["history"] == [
         {"role": "user", "content": "earlier turn"},
         {"role": "assistant", "content": "earlier reply"},
     ]
+    assert "max_steps" in captured
     assert captured["max_steps"] == CoachAgentLoop.SAFETY_MAX_STEPS
+    assert "context" in captured
     context = captured["context"]
     assert context.extra["answer_mode"] == "guided"
     assert context.extra["allow_coach_only_tools"] is True
@@ -4248,7 +4278,7 @@ async def test_agentic_reply_keeps_coach_only_tools_off_in_direct_mode(
 ) -> None:
     service = ProviderService(config=_make_config(), api_key="sk-test")
     profile = _make_profile(answer_policy="direct")
-    captured: dict[str, object] = {}
+    captured: _AgentLoopCapture = {}
 
     async def _fake_call(
         _messages: list[dict[str, object]],
@@ -4259,7 +4289,7 @@ async def test_agentic_reply_keeps_coach_only_tools_off_in_direct_mode(
     fake_provider = SimpleNamespace(protocol="openai_chat_completions", call=_fake_call, call_stream=None)
 
     class _FakeLoop:
-        def __init__(self, *, provider: object, registry: object, context: object, max_steps: int) -> None:
+        def __init__(self, *, provider: object, registry: object, context: ToolContext, max_steps: int) -> None:
             captured["context"] = context
             captured["max_steps"] = max_steps
 
@@ -4291,6 +4321,7 @@ async def test_agentic_reply_keeps_coach_only_tools_off_in_direct_mode(
     )
 
     assert reply["content"] == "Direct reply."
+    assert "context" in captured
     context = captured["context"]
     assert context.extra["answer_mode"] == "direct"
     assert context.extra["allow_coach_only_tools"] is False
@@ -6431,8 +6462,8 @@ async def test_calls_openai_chat_completion() -> None:
 async def test_coaching_reply_falls_back_to_lowercase_model_candidate() -> None:
     config = ProviderConfig(
         name="mimo-provider",
-        base_url="https://example.com/v1",
-        api_key_ref="trainer.mimo",
+        baseUrl="https://example.com/v1",
+        apiKeyRef="trainer.mimo",
         model="MiMo-V2.5",
     )
     service = ProviderService(config=config, api_key="sk-test-key")
@@ -6840,7 +6871,9 @@ async def test_coaching_reply_threads_prior_history_into_model_messages() -> Non
         )
 
     assert reply == "Continue from that same boundary."
-    request_messages = mock_client.chat.completions.create.await_args.kwargs["messages"]
+    await_args = mock_client.chat.completions.create.await_args
+    assert await_args is not None
+    request_messages = await_args.kwargs["messages"]
     assert request_messages[0]["role"] == "system"
     assert request_messages[1] == {
         "role": "user",
@@ -7454,7 +7487,9 @@ async def test_agentic_stream_uses_one_plain_recovery_after_an_empty_final(
     plain_reply.assert_awaited_once()
     assert _RecoveringStreamLoop.run_count == 0
     assert final["stop_reason"] == "completed"
-    assert final["content"].startswith("Learn: inspect the debug target")
+    final_content = final["content"]
+    assert isinstance(final_content, str)
+    assert final_content.startswith("Learn: inspect the debug target")
 
 
 @pytest.mark.asyncio
@@ -7600,7 +7635,9 @@ async def test_agentic_stream_recovers_timeout_with_guided_lane_visible_reply(
     plain_reply.assert_not_awaited()
     assert final["stop_reason"] == "timeout"
     assert final["fell_back"] is True
-    assert final["summary"].startswith("The provider timed out before it could finish")
+    final_summary = final["summary"]
+    assert isinstance(final_summary, str)
+    assert final_summary.startswith("The provider timed out before it could finish")
     assert "trustworthy VS Code debug loop" in str(final["content"])
     assert "timed out" not in str(final["content"])
 
@@ -7748,10 +7785,10 @@ def test_has_api_key_false_empty_string() -> None:
 def test_loopback_provider_runs_tool_loop_without_api_key() -> None:
     config = ProviderConfig(
         name="loopback-fixture",
-        base_url="http://127.0.0.1:1234/v1",
-        api_key_ref="trainer.loopback",
+        baseUrl="http://127.0.0.1:1234/v1",
+        apiKeyRef="trainer.loopback",
         model="fixture-model",
-        capabilities={"tools": True, "streaming": True},
+        capabilities=CapabilityFlags(tools=True, streaming=True),
     )
     service = ProviderService(config=config, api_key="")
     assert service.has_api_key is False
@@ -7761,10 +7798,10 @@ def test_loopback_provider_runs_tool_loop_without_api_key() -> None:
 def test_remote_provider_still_needs_a_key_for_the_tool_loop() -> None:
     config = ProviderConfig(
         name="remote-fixture",
-        base_url="https://gateway.example/v1",
-        api_key_ref="trainer.remote",
+        baseUrl="https://gateway.example/v1",
+        apiKeyRef="trainer.remote",
         model="fixture-model",
-        capabilities={"tools": True, "streaming": True},
+        capabilities=CapabilityFlags(tools=True, streaming=True),
     )
     service = ProviderService(config=config, api_key="")
     assert service.supports_executable_tools() is False
@@ -7973,13 +8010,13 @@ async def test_chat_completion_with_api_key() -> None:
 async def test_chat_completion_appends_v1_for_non_google_gemini_gateway_without_version_path() -> None:
     config = ProviderConfig(
         name="minimax-gemini-compatible",
-        base_url="https://gateway.example.com",
-        api_key_ref="trainer.gateway",
+        baseUrl="https://gateway.example.com",
+        apiKeyRef="trainer.gateway",
         model="MiniMax-M3",
         protocol="gemini_generate_content",
     )
     service = ProviderService(config=config, api_key="sk-test-key")
-    captured: dict[str, object] = {}
+    captured: _AsyncOpenAICtorCapture = {}
 
     fake_choice = MagicMock()
     fake_choice.message.content = "pong"
@@ -7999,7 +8036,7 @@ async def test_chat_completion_appends_v1_for_non_google_gemini_gateway_without_
         *,
         api_key: str,
         base_url: str | None,
-        timeout: float,
+        timeout: httpx.Timeout,
         max_retries: int,
     ) -> object:
         captured["api_key"] = api_key
@@ -8012,12 +8049,16 @@ async def test_chat_completion_appends_v1_for_non_google_gemini_gateway_without_
         result = await service.chat_completion([{"role": "user", "content": "Reply with exactly: pong"}])
 
     assert result == "pong"
+    assert "api_key" in captured
     assert captured["api_key"] == "sk-test-key"
+    assert "base_url" in captured
     assert captured["base_url"] == "https://gateway.example.com/v1"
     # Generation client: reasoning carries NO designed read wall (httpx
     # Timeout with read=None); connect/write/pool stay bounded for liveness.
+    assert "timeout" in captured
     assert captured["timeout"].read is None
     assert captured["timeout"].connect == 10.0
+    assert "max_retries" in captured
     assert captured["max_retries"] == DEFAULT_OPENAI_CLIENT_MAX_RETRIES
 
 
@@ -8560,17 +8601,17 @@ def test_success_signal_patch_never_doubles_sentence_stop() -> None:
     """The wrapper adds its own full stop; a terminated signal must not yield "。。"."""
     from app.llm.coaching_reply_drafts import _compose_success_signal_patch
 
-    terminated = {"success_signal": "断言通过且没有回归。"}
+    terminated: dict[str, object] = {"success_signal": "断言通过且没有回归。"}
     assert (
         _compose_success_signal_patch(reply="", exercise_prompt=terminated, chinese=True)
         == "这一步算过的信号是：断言通过且没有回归。"
     )
-    unterminated = {"success_signal": "断言通过且没有回归"}
+    unterminated: dict[str, object] = {"success_signal": "断言通过且没有回归"}
     assert (
         _compose_success_signal_patch(reply="", exercise_prompt=unterminated, chinese=True)
         == "这一步算过的信号是：断言通过且没有回归。"
     )
-    english = {"success_signal": "the assertion passes."}
+    english: dict[str, object] = {"success_signal": "the assertion passes."}
     assert (
         _compose_success_signal_patch(reply="", exercise_prompt=english, chinese=False)
         == "You can count this slice as done when: the assertion passes."
@@ -8589,23 +8630,23 @@ def test_minimax_declared_thinking_survives_every_wire_path() -> None:
     """
     from app.llm.provider_service import ProviderService
 
-    def normalized(**defaults: object) -> dict[str, object]:
+    def normalized(**defaults: object):
         config = ProviderConfig(
             name="custom-minimax-gateway",
-            base_url="http://minimax-gateway.test",
-            api_key_ref="trainer.minimax",
+            baseUrl="http://minimax-gateway.test",
+            apiKeyRef="trainer.minimax",
             model="MiniMax-M3",
             protocol="openai_chat_completions_compatible",
-            request_defaults=defaults,
+            requestDefaults=defaults,
         )
         return ProviderService._raw_provider_request_defaults(config)  # noqa: SLF001
 
     declared = normalized(extra_body={"thinking": {"type": "enabled"}})
-    assert declared["extra_body"]["thinking"] == {"type": "enabled"}  # type: ignore[index]
+    assert declared["extra_body"]["thinking"] == {"type": "enabled"}
 
     undeclared = normalized(max_tokens=256)
     # No declared thinking: the short-visible-reply default still applies.
-    assert undeclared.get("extra_body", {}).get("thinking") == {"type": "disabled"}  # type: ignore[union-attr]
+    assert undeclared.get("extra_body", {}).get("thinking") == {"type": "disabled"}
 
 
 def test_timeout_recovery_content_guard_preserves_substantive_progress() -> None:

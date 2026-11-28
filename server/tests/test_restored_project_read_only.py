@@ -279,7 +279,8 @@ def test_turn_leftover_not_live_denies_project_write_tools(
         body = response.json()
         agent_meta = body.get("agent_meta") or {}
         assert agent_meta.get("agentic") is True
-        tool_events = agent_meta.get("tool_events") or []
+        raw_tool_events = agent_meta.get("tool_events")
+        tool_events = raw_tool_events if isinstance(raw_tool_events, list) else []
         assert _denied_write_tool_event(tool_events, tool_name), tool_events
         assert tool_name not in _schema_names(scripted)
         assert body.get("snapshot", body).get("plan") in (None, {})
@@ -371,7 +372,8 @@ def test_turn_live_plan_coaching_still_denies_project_write_tools(
         body = response.json()
         agent_meta = body.get("agent_meta") or {}
         assert agent_meta.get("agentic") is True
-        tool_events = agent_meta.get("tool_events") or []
+        raw_tool_events = agent_meta.get("tool_events")
+        tool_events = raw_tool_events if isinstance(raw_tool_events, list) else []
         assert _denied_write_tool_event(tool_events, tool_name), tool_events
         assert tool_name not in _schema_names(scripted)
         _assert_project_untouched(project, sentinel, before)
@@ -450,7 +452,8 @@ def test_turn_stream_leftover_denies_project_write_tools(
         assert isinstance(raw_meta, dict), "stream must carry agent metadata"
         agent_meta = raw_meta
         assert agent_meta.get("agentic") is True
-        tool_events = agent_meta.get("tool_events") or []
+        raw_tool_events = agent_meta.get("tool_events")
+        tool_events = raw_tool_events if isinstance(raw_tool_events, list) else []
         assert _denied_write_tool_event(tool_events, tool_name), tool_events
         assert tool_name not in _schema_names(scripted)
         latest = runtime.repository.get_latest_plan(workspace_id)

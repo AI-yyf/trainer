@@ -28,8 +28,8 @@ def build_client(tmp_path: Path, *, configure_provider: bool = True) -> TestClie
     if configure_provider:
         provider = ProviderConfig(
             name="test-openai-compatible",
-            base_url="http://127.0.0.1:9/v1",
-            api_key_ref="trainer.default",
+            baseUrl="http://127.0.0.1:9/v1",
+            apiKeyRef="trainer.default",
             model="gpt-4o-mini",
             capabilities=CapabilityFlags(
                 chat=True,
@@ -37,7 +37,7 @@ def build_client(tmp_path: Path, *, configure_provider: bool = True) -> TestClie
                 vision=False,
                 embeddings=True,
                 tools=False,
-                json_schema=False,
+                jsonSchema=False,
                 streaming=True,
             ),
         )

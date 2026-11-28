@@ -397,8 +397,10 @@ async def test_loop_timeout_surfaces_recovery_summary() -> None:
 
     def _slow_call(
         _messages: list[dict[str, Any]], _tools: list[dict[str, Any]] | None
-    ) -> dict[str, Any]:
-        return {"content": "late", "tool_calls": []}
+    ) -> asyncio.Future[dict[str, Any]]:
+        # The reply is still pending when the patched ``wait_for`` times out, so
+        # nothing this returns is ever awaited.
+        return asyncio.get_running_loop().create_future()
 
     provider = AgentProvider(protocol="openai_chat_completions", call=_slow_call)
     loop = CoachAgentLoop(
@@ -1259,7 +1261,11 @@ async def test_streaming_loop_cancels_provider_iterator_when_stream_event_is_set
     stream = loop.run_stream([{"role": "user", "content": "cancel"}])
     assert (await anext(stream))["type"] == "step"
     assert (await anext(stream))["type"] == "text"
-    pending = asyncio.create_task(anext(stream))
+
+    async def _next_event() -> dict[str, Any]:
+        return await anext(stream)
+
+    pending = asyncio.create_task(_next_event())
     await asyncio.wait_for(provider_waiting.wait(), timeout=0.5)
     cancellation.set()
     try:
@@ -1722,7 +1728,7 @@ async def test_agent_loop_hides_tools_outside_the_current_turn_allowlist() -> No
         captured_tools.extend(tools or [])
         return {"content": "Keep the next move small.", "tool_calls": []}
 
-    provider = SimpleNamespace(protocol="openai_chat_completions", call=_call, call_stream=None)
+    provider = AgentProvider(protocol="openai_chat_completions", call=_call)
     context = ToolContext(
         runtime=None,
         workspace_id="workspace-test",
@@ -1867,7 +1873,7 @@ async def test_agent_loop_never_exposes_generate_training_card_from_chat() -> No
         captured_tools.extend(tools or [])
         return {"content": "Done.", "tool_calls": []}
 
-    provider = SimpleNamespace(protocol="openai_chat_completions", call=_call, call_stream=None)
+    provider = AgentProvider(protocol="openai_chat_completions", call=_call)
     context = ToolContext(
         runtime=None,
         workspace_id="workspace-test",
@@ -1945,17 +1951,17 @@ def test_native_binding_transport_timeout_exceeds_agent_loop_ceiling() -> None:
 
 
 def test_provider_service_build_agent_provider_uses_config_protocol() -> None:
-    from app.core.models import ProviderConfig
+    from app.core.models import CapabilityFlags, ProviderConfig
     from app.llm.provider_service import ProviderService
 
     service = ProviderService(
         config=ProviderConfig(
             name="Custom Gateway",
-            base_url="https://gateway.example",
-            api_key_ref="trainer.custom",
+            baseUrl="https://gateway.example",
+            apiKeyRef="trainer.custom",
             model="MiniMax-M3",
             protocol="anthropic_messages",
-            capabilities={"tools": True, "vision": False},
+            capabilities=CapabilityFlags(tools=True, vision=False),
         ),
         api_key="sk-test",
     )
@@ -2832,12 +2838,14 @@ async def test_anthropic_stream_uses_transport_timeout_after_agent_loop_ceiling(
     client_context.__aenter__ = AsyncMock(return_value=client)
     client_context.__aexit__ = AsyncMock(return_value=False)
 
+    provider = binding.build_agent_provider()
+    assert provider.call_stream is not None
     with patch(
         "app.llm.agent_binding.httpx.AsyncClient", return_value=client_context
     ) as async_client:
         events = [
             event
-            async for event in binding.build_agent_provider().call_stream(
+            async for event in provider.call_stream(
                 [{"role": "user", "content": "hi"}], None
             )
         ]
@@ -2880,10 +2888,12 @@ async def test_nonofficial_anthropic_stream_disables_thinking_on_first_request()
     client_context.__aenter__ = AsyncMock(return_value=client)
     client_context.__aexit__ = AsyncMock(return_value=False)
 
+    provider = binding.build_agent_provider()
+    assert provider.call_stream is not None
     with patch("app.llm.agent_binding.httpx.AsyncClient", return_value=client_context):
         events = [
             event
-            async for event in binding.build_agent_provider().call_stream(
+            async for event in provider.call_stream(
                 [{"role": "user", "content": "hi"}], None
             )
         ]
@@ -2943,10 +2953,12 @@ async def test_nonofficial_anthropic_stream_uses_openai_stream_fallback_for_visi
     client_context.__aenter__ = AsyncMock(return_value=client)
     client_context.__aexit__ = AsyncMock(return_value=False)
 
+    provider = binding.build_agent_provider()
+    assert provider.call_stream is not None
     with patch("app.llm.agent_binding.httpx.AsyncClient", return_value=client_context):
         events = [
             event
-            async for event in binding.build_agent_provider().call_stream(
+            async for event in provider.call_stream(
                 [{"role": "user", "content": "hi"}], None
             )
         ]
@@ -3462,10 +3474,12 @@ async def test_gemini_compatible_gateway_stream_retries_openai_chat_when_visible
         _is_model_not_supported_error=lambda exc: False,
     )
     binding = ProviderAgentBinding(provider_service=service, protocol="gemini_generate_content")
+    provider = binding.build_agent_provider()
+    assert provider.call_stream is not None
 
     events = [
         event
-        async for event in binding.build_agent_provider().call_stream(
+        async for event in provider.call_stream(
             [{"role": "user", "content": "teach remote ssh"}],
             None,
         )
@@ -3484,15 +3498,17 @@ async def test_gemini_compatible_gateway_stream_retries_openai_chat_when_visible
 
 
 def _make_provider_service_with_mock_client() -> tuple[Any, MagicMock]:
+    from app.core.models import CapabilityFlags, ProviderConfig
     from app.llm.provider_service import ProviderService
 
     service = ProviderService()
     service._api_key = "sk-test"  # noqa: SLF001
-    service._config = SimpleNamespace(  # noqa: SLF001
+    service._config = ProviderConfig(  # noqa: SLF001
         name="openai",
-        base_url="https://api.openai.com/v1",
+        baseUrl="https://api.openai.com/v1",
+        apiKeyRef="trainer.default",
         model="gpt-4o-mini",
-        capabilities=SimpleNamespace(vision=False, chat=True),
+        capabilities=CapabilityFlags(vision=False, chat=True),
     )
     mock_client = MagicMock()
     mock_client.chat = MagicMock()
@@ -3756,6 +3772,7 @@ async def test_openai_chat_stream_emits_delta_and_final() -> None:
     mock_client.chat.completions.create = AsyncMock(return_value=_chunk_iter())
 
     provider = binding.build_agent_provider()
+    assert provider.call_stream is not None
     events = [event async for event in provider.call_stream([], None)]
     deltas = [event for event in events if event["type"] == "delta"]
     finals = [event for event in events if event["type"] == "final"]
@@ -3780,7 +3797,7 @@ async def test_coaching_reply_agentic_returns_envelope_when_model_uses_tool() ->
     * the returned envelope surfaces ``tool_events`` and a non-empty
       ``content``.
     """
-    from app.core.models import UserProfile
+    from app.core.models import CapabilityFlags, ProviderConfig, UserProfile
     from app.llm.provider_service import ProviderService
 
     profile = UserProfile(
@@ -3792,11 +3809,12 @@ async def test_coaching_reply_agentic_returns_envelope_when_model_uses_tool() ->
     )
     service = ProviderService()
     service._api_key = "sk-test"  # noqa: SLF001
-    service._config = SimpleNamespace(  # noqa: SLF001
+    service._config = ProviderConfig(  # noqa: SLF001
         name="openai",
-        base_url="https://api.openai.com/v1",
+        baseUrl="https://api.openai.com/v1",
+        apiKeyRef="trainer.default",
         model="gpt-4o-mini",
-        capabilities=SimpleNamespace(vision=False, chat=True, tools=True),
+        capabilities=CapabilityFlags(vision=False, chat=True, tools=True),
     )
     # Track turn count so the model first calls a tool then finalizes.
     call_count = {"n": 0}
@@ -3847,7 +3865,7 @@ async def test_coaching_reply_agentic_returns_envelope_when_model_uses_tool() ->
 async def test_coaching_reply_agentic_blocks_practice_pass_claim_without_current_file_verification() -> (
     None
 ):
-    from app.core.models import UserProfile
+    from app.core.models import CapabilityFlags, ProviderConfig, UserProfile
     from app.llm.provider_service import ProviderService
 
     profile = UserProfile(
@@ -3857,11 +3875,12 @@ async def test_coaching_reply_agentic_blocks_practice_pass_claim_without_current
     )
     service = ProviderService()
     service._api_key = "sk-test"  # noqa: SLF001
-    service._config = SimpleNamespace(  # noqa: SLF001
+    service._config = ProviderConfig(  # noqa: SLF001
         name="openai",
-        base_url="https://api.openai.com/v1",
+        baseUrl="https://api.openai.com/v1",
+        apiKeyRef="trainer.default",
         model="gpt-4o-mini",
-        capabilities=SimpleNamespace(vision=False, chat=True, tools=True),
+        capabilities=CapabilityFlags(vision=False, chat=True, tools=True),
     )
 
     message = MagicMock()
@@ -3909,7 +3928,7 @@ async def test_coaching_reply_agentic_blocks_practice_pass_claim_without_current
 
 
 async def test_coaching_reply_agentic_auto_verifies_practice_pass_when_model_skips_tool() -> None:
-    from app.core.models import UserProfile
+    from app.core.models import CapabilityFlags, ProviderConfig, UserProfile
     from app.llm.provider_service import ProviderService
 
     profile = UserProfile(
@@ -3919,11 +3938,12 @@ async def test_coaching_reply_agentic_auto_verifies_practice_pass_when_model_ski
     )
     service = ProviderService()
     service._api_key = "sk-test"  # noqa: SLF001
-    service._config = SimpleNamespace(  # noqa: SLF001
+    service._config = ProviderConfig(  # noqa: SLF001
         name="openai",
-        base_url="https://api.openai.com/v1",
+        baseUrl="https://api.openai.com/v1",
+        apiKeyRef="trainer.default",
         model="gpt-4o-mini",
-        capabilities=SimpleNamespace(vision=False, chat=True, tools=True),
+        capabilities=CapabilityFlags(vision=False, chat=True, tools=True),
     )
 
     message = MagicMock()
@@ -3973,7 +3993,7 @@ async def test_coaching_reply_agentic_auto_verifies_practice_pass_when_model_ski
 async def test_coaching_reply_agentic_stream_buffers_practice_pass_until_auto_verification() -> (
     None
 ):
-    from app.core.models import UserProfile
+    from app.core.models import CapabilityFlags, ProviderConfig, UserProfile
     from app.llm.provider_service import ProviderService
 
     profile = UserProfile(
@@ -3983,11 +4003,12 @@ async def test_coaching_reply_agentic_stream_buffers_practice_pass_until_auto_ve
     )
     service = ProviderService()
     service._api_key = "sk-test"  # noqa: SLF001
-    service._config = SimpleNamespace(  # noqa: SLF001
+    service._config = ProviderConfig(  # noqa: SLF001
         name="openai",
-        base_url="https://api.openai.com/v1",
+        baseUrl="https://api.openai.com/v1",
+        apiKeyRef="trainer.default",
         model="gpt-4o-mini",
-        capabilities=SimpleNamespace(vision=False, chat=True, tools=True),
+        capabilities=CapabilityFlags(vision=False, chat=True, tools=True),
     )
 
     async def _call(
@@ -4048,7 +4069,7 @@ async def test_coaching_reply_agentic_stream_buffers_practice_pass_until_auto_ve
 async def test_coaching_reply_agentic_allows_practice_pass_after_current_file_verification() -> (
     None
 ):
-    from app.core.models import UserProfile
+    from app.core.models import CapabilityFlags, ProviderConfig, UserProfile
     from app.llm.provider_service import ProviderService
 
     profile = UserProfile(
@@ -4058,11 +4079,12 @@ async def test_coaching_reply_agentic_allows_practice_pass_after_current_file_ve
     )
     service = ProviderService()
     service._api_key = "sk-test"  # noqa: SLF001
-    service._config = SimpleNamespace(  # noqa: SLF001
+    service._config = ProviderConfig(  # noqa: SLF001
         name="openai",
-        base_url="https://api.openai.com/v1",
+        baseUrl="https://api.openai.com/v1",
+        apiKeyRef="trainer.default",
         model="gpt-4o-mini",
-        capabilities=SimpleNamespace(vision=False, chat=True, tools=True),
+        capabilities=CapabilityFlags(vision=False, chat=True, tools=True),
     )
     call_count = {"n": 0}
 
@@ -4128,17 +4150,18 @@ async def test_coaching_reply_agentic_allows_practice_pass_after_current_file_ve
 
 
 async def test_coaching_reply_agentic_falls_back_when_provider_raises() -> None:
-    from app.core.models import UserProfile
+    from app.core.models import CapabilityFlags, ProviderConfig, UserProfile
     from app.llm.provider_service import ProviderService
 
     profile = UserProfile(long_term_goal="learn", weekly_hours=4)
     service = ProviderService()
     service._api_key = "sk-test"  # noqa: SLF001
-    service._config = SimpleNamespace(  # noqa: SLF001
+    service._config = ProviderConfig(  # noqa: SLF001
         name="openai",
-        base_url="https://api.openai.com/v1",
+        baseUrl="https://api.openai.com/v1",
+        apiKeyRef="trainer.default",
         model="gpt-4o-mini",
-        capabilities=SimpleNamespace(vision=False, chat=True, tools=True),
+        capabilities=CapabilityFlags(vision=False, chat=True, tools=True),
     )
 
     mock_client = MagicMock()

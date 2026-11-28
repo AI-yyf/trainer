@@ -231,7 +231,10 @@ async def _run_matrix() -> dict[str, Any]:
             ])
             chat_svc._create_chat_completion_negotiated_async = AsyncMock(return_value=chat_stream_chunks)
             chat_binding = ProviderAgentBinding(provider_service=chat_svc, protocol="openai_chat_completions")
-            chat_events = [ev async for ev in chat_binding.build_agent_provider().call_stream([{"role": "user", "content": "hi"}], None)]
+            # build_agent_provider() always wires call_stream; narrow the Optional field for the type checker.
+            chat_call_stream = chat_binding.build_agent_provider().call_stream
+            assert chat_call_stream is not None
+            chat_events = [ev async for ev in chat_call_stream([{"role": "user", "content": "hi"}], None)]
             protocol_usages["openai_chat_completions"] = chat_events[-1].get("usage")
 
             # 3b. OpenAI Responses stream
@@ -280,7 +283,9 @@ async def _run_matrix() -> dict[str, Any]:
             resp_client.responses.stream.return_value = _FakeResponsesCM()
             resp_svc._get_client.return_value = resp_client
             resp_binding = ProviderAgentBinding(provider_service=resp_svc, protocol="openai_responses")
-            resp_events = [ev async for ev in resp_binding.build_agent_provider().call_stream([{"role": "user", "content": "hi"}], None)]
+            resp_call_stream = resp_binding.build_agent_provider().call_stream
+            assert resp_call_stream is not None
+            resp_events = [ev async for ev in resp_call_stream([{"role": "user", "content": "hi"}], None)]
             protocol_usages["openai_responses"] = resp_events[-1].get("usage")
 
             # 3c. Gemini GenerateContent stream
@@ -336,7 +341,9 @@ async def _run_matrix() -> dict[str, Any]:
                 }),
             ]
             with patch.object(gem_binding, "_async_http_client", return_value=_FakeHTTPClient(gem_lines)):
-                gem_events = [ev async for ev in gem_binding.build_agent_provider().call_stream([{"role": "user", "content": "hi"}], None)]
+                gem_call_stream = gem_binding.build_agent_provider().call_stream
+                assert gem_call_stream is not None
+                gem_events = [ev async for ev in gem_call_stream([{"role": "user", "content": "hi"}], None)]
             protocol_usages["gemini_generate_content"] = gem_events[-1].get("usage")
 
             # 3d. Anthropic Messages stream
@@ -375,7 +382,9 @@ async def _run_matrix() -> dict[str, Any]:
                 "data: " + json.dumps({"type": "message_stop"}),
             ]
             with patch.object(anth_binding, "_async_http_client", return_value=_FakeHTTPClient(anth_lines)):
-                anth_events = [ev async for ev in anth_binding.build_agent_provider().call_stream([{"role": "user", "content": "hi"}], None)]
+                anth_call_stream = anth_binding.build_agent_provider().call_stream
+                assert anth_call_stream is not None
+                anth_events = [ev async for ev in anth_call_stream([{"role": "user", "content": "hi"}], None)]
             protocol_usages["anthropic_messages"] = anth_events[-1].get("usage")
 
             all_4_ok = all(

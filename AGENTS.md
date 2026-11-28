@@ -33,7 +33,7 @@ npm run sync:server --prefix extension
 
 # 2. Python lint, static types, and backend unit/integration suite
 server/.venv/bin/ruff check server/app server/tests
-npm run verify:server-pyright
+npm run verify:server-pyright  # pyright over server/app and server/tests: zero errors, no type: ignore
 server/.venv/bin/pytest server/tests -q
 
 # 3. Full TypeScript check (Webview + Extension), extension host tests, i18n, copy vocabulary, and production build

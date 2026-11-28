@@ -3,8 +3,11 @@ from __future__ import annotations
 import ast
 import sys
 from pathlib import Path
+from typing import Any, Protocol, TypedDict, TypeGuard
 
 import pytest
+
+from app.core.models import ProviderConfig
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 SERVER_ROOT = REPOSITORY_ROOT / "server"
@@ -197,7 +200,76 @@ MALFORMED_VISIBLE_COPY_MARKERS = (
 )
 
 
-def _load_provider_from_raw_source(source_path: Path) -> dict[str, object]:
+class _RawProviderService(Protocol):
+    """The reply surface of ``ProviderService`` that this file calls on the raw-source class.
+
+    The class is compiled from the shipped source into a private namespace, so it is a
+    different class object from ``app.llm.provider_service.ProviderService`` and only its
+    shape can be declared here. Members mirror ``app/llm/provider_service.py``.
+    """
+
+    def __init__(self, config: ProviderConfig | None = None, api_key: str | None = None) -> None: ...
+
+    def _onboarding_reply(self, response_language: str | None = None) -> str: ...
+
+    def _error_reply(self, exc: Exception, response_language: str | None = None) -> str: ...
+
+    def _missing_api_key_reply(self, response_language: str | None = None) -> str: ...
+
+    def provider_failure_reply(
+        self,
+        category: str,
+        detail: str | None,
+        response_language: str | None,
+    ) -> str: ...
+
+    def _fallback_empty_reply(
+        self,
+        *,
+        message: str = ...,
+        current_file: dict[str, object] | None = ...,
+        response_language: str | None = ...,
+    ) -> str: ...
+
+
+def _is_raw_provider_service_class(value: object) -> TypeGuard[type[_RawProviderService]]:
+    return callable(value)
+
+
+class _MessageContextFunction[_ReturnValue](Protocol):
+    """Signature shared by ``_agentic_fallback_continuity`` and ``_build_empty_reply_override``."""
+
+    def __call__(
+        self,
+        message: str,
+        *,
+        current_file: dict[str, object] | None,
+        coach_context: dict[str, Any] | None,
+        response_language: str | None,
+    ) -> _ReturnValue: ...
+
+
+def _is_fallback_continuity(
+    value: object,
+) -> TypeGuard[_MessageContextFunction[tuple[str, str]]]:
+    return callable(value)
+
+
+def _is_empty_reply_override(
+    value: object,
+) -> TypeGuard[_MessageContextFunction[dict[str, object]]]:
+    return callable(value)
+
+
+class _RawProviderModule(TypedDict):
+    """The members of the exec'd ``provider_service`` namespace that this file calls."""
+
+    ProviderService: type[_RawProviderService]
+    _agentic_fallback_continuity: _MessageContextFunction[tuple[str, str]]
+    _build_empty_reply_override: _MessageContextFunction[dict[str, object]]
+
+
+def _load_provider_from_raw_source(source_path: Path) -> _RawProviderModule:
     if str(SERVER_ROOT) not in sys.path:
         sys.path.insert(0, str(SERVER_ROOT))
 
@@ -207,7 +279,20 @@ def _load_provider_from_raw_source(source_path: Path) -> dict[str, object]:
         "__file__": str(source_path),
     }
     exec(compile(source_path.read_bytes(), str(source_path), "exec"), namespace)
-    return namespace
+
+    # ``exec`` leaves every namespace member statically ``object``; ``callable`` is the runtime
+    # fact the calls below depend on, and each guard names the shape the call site relies on.
+    provider_service = namespace["ProviderService"]
+    fallback_continuity = namespace["_agentic_fallback_continuity"]
+    empty_reply_override = namespace["_build_empty_reply_override"]
+    assert _is_raw_provider_service_class(provider_service)
+    assert _is_fallback_continuity(fallback_continuity)
+    assert _is_empty_reply_override(empty_reply_override)
+    return {
+        "ProviderService": provider_service,
+        "_agentic_fallback_continuity": fallback_continuity,
+        "_build_empty_reply_override": empty_reply_override,
+    }
 
 
 def _assert_clean_chinese_reply(reply: object) -> None:

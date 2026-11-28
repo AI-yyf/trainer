@@ -1,22 +1,38 @@
 from pathlib import Path
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from provider_fixtures import seed_verified_capabilities
 
-from app.core.models import ProviderConfig
+from app.api.runtime import TrainerRuntime
+from app.core.models import CapabilityFlags, ProviderConfig
 from app.core.settings import AppSettings
 from app.llm.provider_service import ProviderService
 from app.main import create_app
 
 
+def _client_runtime(client: TestClient) -> TrainerRuntime:
+    """The ``TrainerRuntime`` that ``create_app`` stored on ``app.state``.
+
+    ``TestClient.app`` is typed as the ASGI callable union, but it holds the
+    ``FastAPI`` instance that ``create_app`` returned.
+    """
+
+    app = client.app
+    assert isinstance(app, FastAPI), type(app)
+    runtime = app.state.runtime
+    assert isinstance(runtime, TrainerRuntime)
+    return runtime
+
+
 def _seed_live_usable_provider(client: TestClient) -> None:
-    runtime = client.app.state.runtime
+    runtime = _client_runtime(client)
     provider = ProviderConfig(
         name="test-openai-compatible",
-        base_url="http://127.0.0.1:9/v1",
-        api_key_ref="trainer.default",
+        baseUrl="http://127.0.0.1:9/v1",
+        apiKeyRef="trainer.default",
         model="gpt-4o-mini",
-        capabilities={"chat": True, "streaming": True, "tools": False},
+        capabilities=CapabilityFlags(chat=True, streaming=True, tools=False),
     )
     runtime.provider_config = provider
     runtime.provider_api_key = "sk-test"
@@ -144,7 +160,7 @@ def test_app_shutdown_closes_semantic_memory_handles(tmp_path: Path) -> None:
         enable_network_fetch=True,
     )
     client = TestClient(create_app(settings))
-    semantic_memory = client.app.state.runtime.resource_service.semantic_memory
+    semantic_memory = _client_runtime(client).resource_service.semantic_memory
     close_calls: list[bool] = []
 
     original_close = semantic_memory.close
@@ -153,7 +169,7 @@ def test_app_shutdown_closes_semantic_memory_handles(tmp_path: Path) -> None:
         close_calls.append(True)
         original_close()
 
-    semantic_memory.close = fake_close  # type: ignore[assignment]
+    semantic_memory.close = fake_close
 
     with client:
         response = client.get("/health")

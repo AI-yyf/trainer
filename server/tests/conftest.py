@@ -4,10 +4,12 @@ import importlib
 import os
 import sqlite3
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
+from os import PathLike
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, Literal, TypeVar, overload
 
 import pytest
 
@@ -74,8 +76,18 @@ except ImportError:
                 "url": self.url,
             }
 
-    trafilatura_stub = ModuleType("trafilatura")
-    settings_stub = ModuleType("trafilatura.settings")
+    # The stub modules are ``ModuleType`` subclasses so that the attributes
+    # assigned below are declared, and therefore type-checked; importing them
+    # behaves exactly like importing a plain ``ModuleType``.
+    class _TrafilaturaSettingsModule(ModuleType):
+        Document: type[_Document]
+
+    class _TrafilaturaModule(ModuleType):
+        settings: _TrafilaturaSettingsModule
+        bare_extraction: Callable[..., dict[str, object] | None]
+
+    trafilatura_stub = _TrafilaturaModule("trafilatura")
+    settings_stub = _TrafilaturaSettingsModule("trafilatura.settings")
     settings_stub.Document = _Document
     trafilatura_stub.settings = settings_stub
     def _bare_extraction(content: str, **_kwargs: object) -> dict[str, object] | None:
@@ -99,7 +111,60 @@ __all__ = ["seed_verified_capabilities", "verified_capability_result"]
 # Every database here lives in a tmp_path deleted after the test, so
 # durability is irrelevant; production defaults are untouched (this file
 # only exists under tests/).
-_original_sqlite_connect = sqlite3.connect
+_original_sqlite_connect: Callable[..., sqlite3.Connection] = sqlite3.connect
+
+# typeshed declares ``sqlite3.connect`` as a generic set of overloads, which a
+# transparent ``*args, **kwargs`` wrapper cannot be assigned to as-is. The
+# overloads below restate its stdlib signatures (3.12+) for the type checker
+# only; the implementation still forwards every argument untouched, so omitted
+# arguments keep the interpreter's own defaults.
+_IsolationLevel = Literal["DEFERRED", "IMMEDIATE", "EXCLUSIVE"]
+_SqlitePath = str | bytes | PathLike[str] | PathLike[bytes]
+_ConnectionT = TypeVar("_ConnectionT", bound=sqlite3.Connection)
+
+
+@overload
+def _fast_sqlite_connect(
+    database: _SqlitePath,
+    timeout: float = 5.0,
+    detect_types: int = 0,
+    isolation_level: _IsolationLevel = "DEFERRED",
+    check_same_thread: bool = True,
+    cached_statements: int = 128,
+    uri: bool = False,
+    *,
+    autocommit: bool = ...,
+) -> sqlite3.Connection: ...
+
+
+@overload
+def _fast_sqlite_connect(
+    database: _SqlitePath,
+    timeout: float,
+    detect_types: int,
+    isolation_level: _IsolationLevel,
+    check_same_thread: bool,
+    factory: type[_ConnectionT],
+    cached_statements: int = 128,
+    uri: bool = False,
+    *,
+    autocommit: bool = ...,
+) -> _ConnectionT: ...
+
+
+@overload
+def _fast_sqlite_connect(
+    database: _SqlitePath,
+    timeout: float = 5.0,
+    detect_types: int = 0,
+    isolation_level: _IsolationLevel = "DEFERRED",
+    check_same_thread: bool = True,
+    *,
+    factory: type[_ConnectionT],
+    cached_statements: int = 128,
+    uri: bool = False,
+    autocommit: bool = ...,
+) -> _ConnectionT: ...
 
 
 def _fast_sqlite_connect(*args: object, **kwargs: object) -> sqlite3.Connection:
@@ -113,7 +178,7 @@ def _fast_sqlite_connect(*args: object, **kwargs: object) -> sqlite3.Connection:
     return connection
 
 
-sqlite3.connect = _fast_sqlite_connect  # type: ignore[assignment]
+sqlite3.connect = _fast_sqlite_connect
 
 
 @pytest.fixture(autouse=True)

@@ -163,7 +163,7 @@ def test_bundled_session_message_formal_plan_mutation_matches_source_contract() 
     )
     source_snake_request = SessionMessageRequest(
         message="Keep the plan current.",
-        formal_plan_mutation=True,
+        formalPlanMutation=True,
     )
     result = _run_bundled_script(
         """

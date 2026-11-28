@@ -1,4 +1,5 @@
 from hashlib import sha256
+from typing import TypedDict
 
 from app.affect.service import AffectService
 from app.api.runtime import (
@@ -27,6 +28,19 @@ class _DummyResourceService(ResourceService):
         pass
 
 
+class _ProviderTransportKwargs(TypedDict):
+    """Alias-named kwargs shared by the ``ProviderConfig(**base, ...)`` constructions.
+
+    ``ProviderConfig`` populates by name too, but its alias names are the ones the
+    synthesized ``__init__`` exposes to the type checker, so they are used here.
+    """
+
+    name: str
+    baseUrl: str
+    apiKeyRef: str
+    model: str
+
+
 def _make_runtime(tmp_path):
     repository = TrainerRepository(tmp_path / "trainer-runtime-test.db")
     return TrainerRuntime(
@@ -46,8 +60,8 @@ def test_provider_service_for_reuses_cached_instance(tmp_path) -> None:
     runtime = _make_runtime(tmp_path)
     config = ProviderConfig(
         name="cached-provider",
-        base_url="https://example.com/v1",
-        api_key_ref="trainer.cache",
+        baseUrl="https://example.com/v1",
+        apiKeyRef="trainer.cache",
         model="gpt-4o-mini",
     )
 
@@ -61,8 +75,8 @@ def test_provider_service_for_separates_different_provider_keys(tmp_path) -> Non
     runtime = _make_runtime(tmp_path)
     config = ProviderConfig(
         name="cached-provider",
-        base_url="https://example.com/v1",
-        api_key_ref="trainer.cache",
+        baseUrl="https://example.com/v1",
+        apiKeyRef="trainer.cache",
         model="gpt-4o-mini",
     )
 
@@ -74,10 +88,10 @@ def test_provider_service_for_separates_different_provider_keys(tmp_path) -> Non
 
 def test_provider_service_for_separates_same_provider_with_different_protocols(tmp_path) -> None:
     runtime = _make_runtime(tmp_path)
-    base = {
+    base: _ProviderTransportKwargs = {
         "name": "same-visible-provider",
-        "base_url": "https://example.com/v1",
-        "api_key_ref": "trainer.cache",
+        "baseUrl": "https://example.com/v1",
+        "apiKeyRef": "trainer.cache",
         "model": "demo-model",
     }
     chat_config = ProviderConfig(**base, protocol="openai_chat_completions_compatible")
@@ -87,15 +101,19 @@ def test_provider_service_for_separates_same_provider_with_different_protocols(t
     second = runtime.provider_service_for(anthropic_config, "sk-test")
 
     assert first is not second
-    assert first._config.protocol == "openai_chat_completions_compatible"  # noqa: SLF001
-    assert second._config.protocol == "anthropic_messages"  # noqa: SLF001
+    first_config = first._config  # noqa: SLF001
+    second_config = second._config  # noqa: SLF001
+    assert first_config is not None
+    assert second_config is not None
+    assert first_config.protocol == "openai_chat_completions_compatible"
+    assert second_config.protocol == "anthropic_messages"
 
 
 def test_provider_service_cache_key_hashes_api_key_without_losing_isolation() -> None:
     config = ProviderConfig(
         name="cached-provider",
-        base_url="https://example.com/v1",
-        api_key_ref="trainer.cache",
+        baseUrl="https://example.com/v1",
+        apiKeyRef="trainer.cache",
         model="gpt-4o-mini",
     )
     api_key = "sk-runtime-cache-secret"
@@ -117,10 +135,10 @@ def test_provider_service_cache_key_hashes_api_key_without_losing_isolation() ->
 def test_capability_cache_key_ignores_declared_capabilities() -> None:
     """Declared tools flags must not segment last-test observation cache."""
 
-    base = {
+    base: _ProviderTransportKwargs = {
         "name": "transport-provider",
-        "base_url": "https://example.com/v1",
-        "api_key_ref": "trainer.cache",
+        "baseUrl": "https://example.com/v1",
+        "apiKeyRef": "trainer.cache",
         "model": "demo-model",
     }
     with_tools = ProviderConfig(**base, capabilities=CapabilityFlags(tools=True))
@@ -136,10 +154,10 @@ def test_failed_last_test_clears_tools_ready_across_declared_capability_variants
     """Cached success under tools=True must not stay tools_ready after a failed last-test."""
 
     runtime = _make_runtime(tmp_path)
-    base = {
+    base: _ProviderTransportKwargs = {
         "name": "transport-provider",
-        "base_url": "https://example.com/v1",
-        "api_key_ref": "trainer.cache",
+        "baseUrl": "https://example.com/v1",
+        "apiKeyRef": "trainer.cache",
         "model": "demo-model",
     }
     declared_tools = ProviderConfig(**base, capabilities=CapabilityFlags(tools=True))
@@ -147,9 +165,9 @@ def test_failed_last_test_clears_tools_ready_across_declared_capability_variants
     success = ProviderTestResponse(
         ok=True,
         detail="observed tools",
-        tools_ready=True,
-        tool_probe_status="verified",
-        capability_evidence=[
+        toolsReady=True,
+        toolProbeStatus="verified",
+        capabilityEvidence=[
             ProviderCapabilityEvidence(
                 name="tools",
                 declared=True,
@@ -161,9 +179,9 @@ def test_failed_last_test_clears_tools_ready_across_declared_capability_variants
     failure = ProviderTestResponse(
         ok=False,
         detail="auth failed",
-        tools_ready=True,
-        tool_probe_status="verified",
-        capability_evidence=[
+        toolsReady=True,
+        toolProbeStatus="verified",
+        capabilityEvidence=[
             ProviderCapabilityEvidence(
                 name="tools",
                 declared=True,
@@ -205,8 +223,8 @@ def test_never_tested_capability_cache_does_not_mark_tools_ready(tmp_path) -> No
     runtime = _make_runtime(tmp_path)
     config = ProviderConfig(
         name="never-tested",
-        base_url="https://example.com/v1",
-        api_key_ref="trainer.cache",
+        baseUrl="https://example.com/v1",
+        apiKeyRef="trainer.cache",
         model="demo-model",
         capabilities=CapabilityFlags(tools=True),
     )

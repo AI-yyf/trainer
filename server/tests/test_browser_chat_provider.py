@@ -18,7 +18,7 @@ import pytest
 from app.core.models import ProviderConfig
 from app.llm.provider_service import ProviderService
 from tests.client_fixtures import build_client
-from tests.test_browser_chat import _pair_browser
+from tests.test_browser_chat import _pair_browser, _runtime
 
 REPLY = "好的，我们先从一个最小验证步骤开始。"
 
@@ -93,7 +93,7 @@ def test_browser_message_uses_the_provider_the_host_last_used_for_the_workspace(
         )
         assert after.status_code == 200, after.text
 
-        service = client.app.state.runtime.workspace_provider_service(workspace_id)
+        service = _runtime(client).workspace_provider_service(workspace_id)
         assert service is not None
         assert service._config is not None and service._config.model == "glm-4.6"  # noqa: SLF001
 
@@ -145,7 +145,7 @@ def test_browser_message_keeps_workspaces_apart(
 
 
 def test_workspace_provider_memory_only_records_what_the_host_named(tmp_path: Path) -> None:
-    runtime = build_client(tmp_path, configure_provider=False).app.state.runtime
+    runtime = _runtime(build_client(tmp_path, configure_provider=False))
     provider = ProviderConfig(
         name="host-gateway",
         baseUrl="http://127.0.0.1:9/v1",

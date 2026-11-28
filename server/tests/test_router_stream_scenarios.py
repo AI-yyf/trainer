@@ -2,17 +2,44 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import NotRequired, TypedDict
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.runtime import TrainerRuntime
-from app.core.models import ProviderCapabilityEvidence, ProviderConfig, ProviderTestResponse
+from app.core.models import (
+    CapabilityFlags,
+    ProviderCapabilityEvidence,
+    ProviderConfig,
+    ProviderTestResponse,
+)
 from app.core.settings import AppSettings
 from app.llm.prompts import build_coaching_messages
 from app.llm.provider_service import ProviderService
 from app.main import create_app
+
+
+def app_runtime(app: FastAPI) -> TrainerRuntime:
+    """The ``TrainerRuntime`` that ``create_app`` stored on ``app.state``."""
+
+    runtime = app.state.runtime
+    assert isinstance(runtime, TrainerRuntime)
+    return runtime
+
+
+def client_runtime(client: TestClient) -> TrainerRuntime:
+    """``app_runtime`` for a ``TestClient``.
+
+    ``TestClient.app`` is typed as the ASGI callable union, but it holds the
+    ``FastAPI`` instance that ``create_app`` returned.
+    """
+
+    app = client.app
+    assert isinstance(app, FastAPI), type(app)
+    return app_runtime(app)
 
 
 def build_client(tmp_path: Path) -> TestClient:
@@ -29,20 +56,20 @@ def build_client(tmp_path: Path) -> TestClient:
     app = create_app(settings)
     provider = ProviderConfig(
         name="test-openai-compatible",
-        base_url="http://127.0.0.1:9/v1",
-        api_key_ref="trainer.default",
+        baseUrl="http://127.0.0.1:9/v1",
+        apiKeyRef="trainer.default",
         model="gpt-4o-mini",
-        capabilities={
-            "chat": True,
-            "responses": True,
-            "vision": False,
-            "embeddings": False,
-            "tools": False,
-            "json_schema": False,
-            "streaming": True,
-        },
+        capabilities=CapabilityFlags(
+            chat=True,
+            responses=True,
+            vision=False,
+            embeddings=False,
+            tools=False,
+            jsonSchema=False,
+            streaming=True,
+        ),
     )
-    runtime = app.state.runtime
+    runtime = app_runtime(app)
     runtime.provider_config = provider
     runtime.provider_api_key = "sk-test"
     runtime.provider_service = ProviderService(config=provider, api_key="sk-test")
@@ -80,16 +107,93 @@ def mark_provider_capabilities_verified(
         ProviderTestResponse(
             ok=True,
             detail="mocked provider capability test",
-            capability_evidence=evidence,
-            tools_ready=tools,
-            tool_probe_status="verified" if tools else "disabled",
+            capabilityEvidence=evidence,
+            toolsReady=tools,
+            toolProbeStatus="verified" if tools else "disabled",
         ),
     )
 
 
-def completed_stream_response(body: str) -> dict[str, object]:
+# Typed views of the ``response`` object a ``complete`` frame carries. Only the
+# members these tests read are declared, typed as the app's own models emit them.
+class _ReplyMessage(TypedDict):
+    content: str
+
+
+class _Reliability(TypedDict, total=False):
+    phase: str
+    outcome: str
+
+
+class _SuggestedAction(TypedDict, total=False):
+    action: str
+
+
+class _CoachTurnSummary(TypedDict):
+    """The ``CoachTurnSummary`` fields read here; the model always dumps them."""
+
+    scenario: str
+    next_step: str
+    requires_confirmation: bool
+
+
+class _CurrentTask(TypedDict):
+    title: str
+
+
+class _StreamSnapshot(TypedDict):
+    current_task: _CurrentTask | None
+
+
+class _CompletedStreamResponse(TypedDict):
+    """``/session/message/stream`` and ``/turn/stream`` complete payload.
+
+    ``agent`` is an ``AgentMeta`` dump with ``extra="allow"`` whose extra keys
+    depend on the path the turn took, so it stays an open mapping. ``intent`` is
+    only set on ``/turn/stream``.
+    """
+
+    reply: _ReplyMessage
+    reliability: _Reliability
+    suggested_actions: list[_SuggestedAction]
+    # Only ``suggested_actions`` is emitted today; the camelCase lookup some
+    # tests keep as a fallback stays typed rather than being removed here.
+    suggestedActions: NotRequired[list[_SuggestedAction]]
+    coach_turn: _CoachTurnSummary
+    agent: dict[str, object]
+    snapshot: _StreamSnapshot
+    artifacts: dict[str, object]
+    intent: NotRequired[str]
+
+
+class _TrainingCard(TypedDict):
+    title: str
+
+
+class _CompletedCardStreamResponse(TypedDict, total=False):
+    """``/training/generate-card/stream`` complete payload; ``card`` is absent
+    when the stream fell back without a card."""
+
+    card: _TrainingCard
+    reliability: _Reliability
+
+
+def _complete_frame_data(body: str) -> str:
     marker = 'data: {"tokens":'
-    payload = [line for line in body.splitlines() if line.startswith(marker)][-1]
+    return [line for line in body.splitlines() if line.startswith(marker)][-1]
+
+
+def completed_stream_response(body: str) -> _CompletedStreamResponse:
+    """The ``response`` object of a turn stream's final ``complete`` frame."""
+
+    payload = _complete_frame_data(body)
+    return json.loads(payload[len("data: ") :])["response"]
+
+
+def completed_card_stream_response(body: str) -> _CompletedCardStreamResponse:
+    """The ``response`` object of a card stream's final ``complete`` frame."""
+
+    payload = _complete_frame_data(body)
     return json.loads(payload[len("data: ") :])["response"]
 
 
@@ -136,7 +240,7 @@ def find_route_by_path(container: object, path: str) -> object | None:
 
 def test_stream_route_completes_honestly_when_provider_was_never_tested(tmp_path: Path) -> None:
     with build_client(tmp_path) as client:
-        runtime = client.app.state.runtime
+        runtime = client_runtime(client)
         runtime.provider_capability_cache.clear()
         start = client.post(
             "/session/start",
@@ -181,7 +285,7 @@ def test_stream_route_completes_honestly_when_provider_was_never_tested(tmp_path
 
 def test_stream_route_attempts_when_chat_verified_but_streaming_unverified(tmp_path: Path) -> None:
     with build_client(tmp_path) as client:
-        runtime = client.app.state.runtime
+        runtime = client_runtime(client)
         provider = runtime.provider_config
         assert isinstance(provider, ProviderConfig)
         runtime.provider_capability_cache.clear()
@@ -191,7 +295,7 @@ def test_stream_route_attempts_when_chat_verified_but_streaming_unverified(tmp_p
             ProviderTestResponse(
                 ok=True,
                 detail="chat probe passed; streaming not observed",
-                capability_evidence=[
+                capabilityEvidence=[
                     ProviderCapabilityEvidence(
                         name="streaming",
                         declared=True,
@@ -199,9 +303,9 @@ def test_stream_route_attempts_when_chat_verified_but_streaming_unverified(tmp_p
                         state="unverified",
                     )
                 ],
-                tools_ready=False,
-                streaming_ready=False,
-                stream_probe_status="unverified",
+                toolsReady=False,
+                streamingReady=False,
+                streamProbeStatus="unverified",
             ),
         )
         start = client.post(
@@ -238,7 +342,7 @@ def test_stream_route_attempts_when_chat_verified_but_streaming_unverified(tmp_p
 
 def test_stream_route_rejects_explicitly_unsupported_streaming(tmp_path: Path) -> None:
     with build_client(tmp_path) as client:
-        runtime = client.app.state.runtime
+        runtime = client_runtime(client)
         provider = runtime.provider_config
         assert isinstance(provider, ProviderConfig)
         runtime.provider_capability_cache.clear()
@@ -248,7 +352,7 @@ def test_stream_route_rejects_explicitly_unsupported_streaming(tmp_path: Path) -
             ProviderTestResponse(
                 ok=True,
                 detail="provider reports streaming unsupported",
-                capability_evidence=[
+                capabilityEvidence=[
                     ProviderCapabilityEvidence(
                         name="streaming",
                         declared=True,
@@ -256,9 +360,9 @@ def test_stream_route_rejects_explicitly_unsupported_streaming(tmp_path: Path) -
                         state="unsupported",
                     )
                 ],
-                tools_ready=False,
-                streaming_ready=False,
-                stream_probe_status="unsupported",
+                toolsReady=False,
+                streamingReady=False,
+                streamProbeStatus="unsupported",
             ),
         )
         start = client.post(
@@ -288,14 +392,14 @@ def test_provider_test_caches_verified_streaming_for_the_matching_service(tmp_pa
         yield "Start with the smallest reproducible case."
 
     with build_client(tmp_path) as client:
-        runtime = client.app.state.runtime
+        runtime = client_runtime(client)
         provider = runtime.provider_config
         assert isinstance(provider, ProviderConfig)
         runtime.provider_capability_cache.clear()
         test_result = ProviderTestResponse(
             ok=True,
             detail="mocked provider probe",
-            capability_evidence=[
+            capabilityEvidence=[
                 ProviderCapabilityEvidence(
                     name="streaming",
                     declared=True,
@@ -628,8 +732,11 @@ def test_turn_stream_non_coach_uses_provider_stream_and_keeps_structured_snapsho
     )
     complete = completed_stream_response(response.text)
     assert complete["reply"]["content"] == "".join(chunks)
+    assert "intent" in complete
     assert complete["intent"] == "task"
-    assert complete["snapshot"]["current_task"]["title"] == "Break this into a task"
+    current_task = complete["snapshot"]["current_task"]
+    assert current_task is not None
+    assert current_task["title"] == "Break this into a task"
     assert complete["artifacts"]
 
 
@@ -653,13 +760,13 @@ def test_agent_stream_rejects_an_unsafe_text_event_even_when_marked_checked(
         }
 
     with build_client(tmp_path) as client:
-        runtime = client.app.state.runtime
+        runtime = client_runtime(client)
         provider = ProviderConfig(
             name="test-agent-stream",
-            base_url="http://127.0.0.1:9/v1",
-            api_key_ref="trainer.default",
+            baseUrl="http://127.0.0.1:9/v1",
+            apiKeyRef="trainer.default",
             model="gpt-4o-mini",
-            capabilities={"chat": True, "tools": True, "streaming": True},
+            capabilities=CapabilityFlags(chat=True, tools=True, streaming=True),
         )
         runtime.provider_config = provider
         runtime.provider_service = ProviderService(config=provider, api_key="sk-test")
@@ -719,13 +826,13 @@ def test_stream_never_emits_gbk_mojibake_split_across_chunks(
         }
 
     with build_client(tmp_path) as client:
-        runtime = client.app.state.runtime
+        runtime = client_runtime(client)
         provider = ProviderConfig(
             name="test-split-mojibake-stream",
-            base_url="http://127.0.0.1:9/v1",
-            api_key_ref="trainer.default",
+            baseUrl="http://127.0.0.1:9/v1",
+            apiKeyRef="trainer.default",
             model="gpt-4o-mini",
-            capabilities={"chat": True, "tools": True, "streaming": True},
+            capabilities=CapabilityFlags(chat=True, tools=True, streaming=True),
         )
         runtime.provider_config = provider
         runtime.provider_service = ProviderService(config=provider, api_key="sk-test")
@@ -784,13 +891,13 @@ def test_agent_stream_forwards_checked_prefix_and_only_the_final_suffix(
         }
 
     with build_client(tmp_path) as client:
-        runtime = client.app.state.runtime
+        runtime = client_runtime(client)
         provider = ProviderConfig(
             name="test-agent-stream-checked-prefix",
-            base_url="http://127.0.0.1:9/v1",
-            api_key_ref="trainer.default",
+            baseUrl="http://127.0.0.1:9/v1",
+            apiKeyRef="trainer.default",
             model="gpt-4o-mini",
-            capabilities={"chat": True, "tools": True, "streaming": True},
+            capabilities=CapabilityFlags(chat=True, tools=True, streaming=True),
         )
         runtime.provider_config = provider
         runtime.provider_service = ProviderService(config=provider, api_key="sk-test")
@@ -838,13 +945,13 @@ def test_agent_stream_uses_local_recovery_without_a_second_model_call(
 
     plain_reply = AsyncMock(return_value="This second model call must not happen.")
     with build_client(tmp_path) as client:
-        runtime = client.app.state.runtime
+        runtime = client_runtime(client)
         provider = ProviderConfig(
             name="test-agent-stream-local-recovery",
-            base_url="http://127.0.0.1:9/v1",
-            api_key_ref="trainer.default",
+            baseUrl="http://127.0.0.1:9/v1",
+            apiKeyRef="trainer.default",
             model="gpt-4o-mini",
-            capabilities={"chat": True, "tools": True, "streaming": True},
+            capabilities=CapabilityFlags(chat=True, tools=True, streaming=True),
         )
         runtime.provider_config = provider
         runtime.provider_service = ProviderService(config=provider, api_key="sk-test")
@@ -917,14 +1024,15 @@ def test_training_card_stream_emits_fragments_before_complete_and_persists_card(
                     "response_language": "en-US",
                 },
             )
-            cards = client.app.state.runtime.memory_service.get_cards(workspace_id)
+            cards = client_runtime(client).memory_service.get_cards(workspace_id)
 
     assert response.status_code == 200, response.text
     assert f'data: {{"chunk": {json.dumps(first_chunk)}}}' in response.text
     assert f'data: {{"chunk": {json.dumps(second_chunk)}}}' in response.text
     first_line = f'data: {{"chunk": {json.dumps(first_chunk)}}}'
     assert response.text.index(first_line) < response.text.index("event: complete")
-    complete = completed_stream_response(response.text)
+    complete = completed_card_stream_response(response.text)
+    assert "card" in complete
     assert complete["card"]["title"] == card_payload["title"]
     assert any(card.title == card_payload["title"] for card in cards)
 
@@ -953,16 +1061,16 @@ def test_training_card_stream_uses_request_provider_without_mutating_runtime_ser
 
     with patch.object(ProviderService, "chat_completion_stream", new=fake_stream):
         with build_client(tmp_path) as client:
-            runtime = client.app.state.runtime
+            runtime = client_runtime(client)
             default_provider = runtime.provider_service
             assert runtime.card_generation_service is not None
             original_card_provider = runtime.card_generation_service._provider
             override_provider = ProviderConfig(
                 name="preview-card-provider",
-                base_url="http://127.0.0.1:9/v1",
-                api_key_ref="preview.training",
+                baseUrl="http://127.0.0.1:9/v1",
+                apiKeyRef="preview.training",
                 model="preview-card-model",
-                capabilities={"chat": True, "streaming": True},
+                capabilities=CapabilityFlags(chat=True, streaming=True),
             )
             mark_provider_capabilities_verified(
                 runtime,
@@ -1053,7 +1161,7 @@ def test_training_card_stream_falls_back_without_a_second_provider_call(tmp_path
     assert response.status_code == 200
     assert calls == 1
     assert "event: error" in response.text
-    completed = completed_stream_response(response.text)
+    completed = completed_card_stream_response(response.text)
     assert not completed.get("card")
     runtime_cards = tmp_path / "sandboxes"
     if runtime_cards.exists():
@@ -1087,13 +1195,13 @@ def test_turn_stream_second_pass_regrounds_the_delivered_next_step(tmp_path: Pat
         }
 
     with build_client(tmp_path) as client:
-        runtime = client.app.state.runtime
+        runtime = client_runtime(client)
         provider = ProviderConfig(
             name="test-second-pass-grounding",
-            base_url="http://127.0.0.1:9/v1",
-            api_key_ref="trainer.default",
+            baseUrl="http://127.0.0.1:9/v1",
+            apiKeyRef="trainer.default",
             model="gpt-4o-mini",
-            capabilities={"chat": True, "tools": True, "streaming": True},
+            capabilities=CapabilityFlags(chat=True, tools=True, streaming=True),
         )
         runtime.provider_config = provider
         runtime.provider_service = ProviderService(config=provider, api_key="sk-test")

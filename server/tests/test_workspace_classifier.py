@@ -844,7 +844,7 @@ class TestModels:
         )
         snapshot = WorkspaceUnderstandingSnapshot(
             repo_summary="ML project",
-            first_look_summary=summary,
+            firstLookSummary=summary,
         )
         assert snapshot.first_look_summary is not None
         assert snapshot.first_look_summary.folder_role == "algorithm_model"

@@ -8,7 +8,13 @@ from typing import Any
 import pytest
 
 from app.api.router_support import _resolve_agent_loop_enabled
-from app.core.models import ProviderConfig, SessionMessageRequest, UserProfile
+from app.core.models import (
+    CapabilityFlags,
+    CurrentFilePayload,
+    ProviderConfig,
+    SessionMessageRequest,
+    UserProfile,
+)
 from app.llm.coaching_replies import _stream_holdback_chars
 from app.llm.provider_service import ProviderService
 
@@ -16,10 +22,10 @@ from app.llm.provider_service import ProviderService
 def _tool_capable_service() -> ProviderService:
     config = ProviderConfig(
         name="phase1-fast-lane",
-        base_url="http://127.0.0.1:9/v1",
-        api_key_ref="trainer.default",
+        baseUrl="http://127.0.0.1:9/v1",
+        apiKeyRef="trainer.default",
         model="gpt-4o-mini",
-        capabilities={"chat": True, "streaming": True, "tools": True},
+        capabilities=CapabilityFlags(chat=True, streaming=True, tools=True),
     )
     return ProviderService(config=config, api_key="sk-test")
 
@@ -53,7 +59,7 @@ def _chunk(content: str, finish_reason: str | None = None) -> SimpleNamespace:
 )
 def test_pure_conceptual_questions_stay_on_zero_tool_fast_lane(message: str) -> None:
     service = _tool_capable_service()
-    request = SessionMessageRequest(message=message, active_view="coach")
+    request = SessionMessageRequest(message=message, activeView="coach")
     assert _resolve_agent_loop_enabled(request, service, stream=True) is False
 
 
@@ -70,7 +76,7 @@ def test_pure_conceptual_questions_stay_on_zero_tool_fast_lane(message: str) -> 
 )
 def test_workspace_library_and_research_queries_route_to_tool_lane(message: str) -> None:
     service = _tool_capable_service()
-    request = SessionMessageRequest(message=message, active_view="coach")
+    request = SessionMessageRequest(message=message, activeView="coach")
     assert _resolve_agent_loop_enabled(request, service, stream=True) is True
 
 
@@ -167,27 +173,28 @@ def test_idle_open_editor_tab_keeps_minimal_context_tier_for_pure_conceptual_qa(
 
     idle_req = SessionMessageRequest(
         message="什么是反向传播？",
-        active_view="coach",
-        current_file={"path": "src/server.py", "language_id": "python", "content": "x = 1"},
+        activeView="coach",
+        current_file=CurrentFilePayload(path="src/server.py", language_id="python", content="x = 1"),
     )
     anchored_req = SessionMessageRequest(
         message="解释一下 server.py 里的逻辑",
-        active_view="coach",
-        current_file={"path": "src/server.py", "language_id": "python", "content": "x = 1"},
+        activeView="coach",
+        current_file=CurrentFilePayload(path="src/server.py", language_id="python", content="x = 1"),
     )
     selected_req = SessionMessageRequest(
         message="这段是什么意思？",
-        active_view="coach",
-        current_file={
-            "path": "src/server.py",
-            "language_id": "python",
-            "content": "x = 1",
-            "selection_text": "x = 1",
-        },
+        activeView="coach",
+        current_file=CurrentFilePayload(
+            path="src/server.py",
+            language_id="python",
+            content="x = 1",
+            selection_text="x = 1",
+        ),
     )
     assert idle_req.current_file is not None
     assert "server.py" not in idle_req.message
     assert "server.py" in anchored_req.message
+    assert selected_req.current_file is not None
     assert selected_req.current_file.selection_text == "x = 1"
 
 

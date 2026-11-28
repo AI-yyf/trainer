@@ -82,6 +82,7 @@ class TestWorkspaceAuthority:
         """Test setting active workspace root."""
         auth = WorkspaceAuthority()
         auth.set_active_workspace(temp_workspace)
+        assert auth.active_workspace_root is not None
         assert Path(auth.active_workspace_root).resolve() == Path(temp_workspace).resolve()
 
     def test_switching_active_workspace_resets_write_authority(self, tmp_path: Path):

@@ -13,6 +13,7 @@ from app.core.models import (
     PlanStage,
     TeachingKnowledgeAsset,
     UserProfile,
+    WorkspaceMemoryToggles,
     WorkspaceUnderstandingSnapshot,
 )
 from app.core.models import ResourceRecord as ApiResourceRecord
@@ -181,6 +182,8 @@ class MemoryServiceTests(unittest.TestCase):
         snapshot = service.snapshot(workspace_id)
         self.assertIsNotNone(snapshot.flash_deck)
         self.assertIsNotNone(snapshot.theory_drill)
+        assert snapshot.flash_deck is not None
+        assert snapshot.theory_drill is not None
         self.assertTrue(any("\u4e00" <= ch <= "\u9fff" for ch in snapshot.flash_deck.title))
         self.assertTrue(any("\u4e00" <= ch <= "\u9fff" for ch in snapshot.theory_drill.title))
         self.assertTrue(any("\u4e00" <= ch <= "\u9fff" for ch in snapshot.dependency_skill_maps[0].priority_summary))
@@ -225,7 +228,7 @@ class MemoryServiceTests(unittest.TestCase):
         service.save_workspace_understanding(
             workspace_id,
             WorkspaceUnderstandingSnapshot(
-                first_look_summary=FirstLookSummary(
+                firstLookSummary=FirstLookSummary(
                     folder_role="empty_new_project",
                     project_type_guess="unknown",
                     confidence=0.9,
@@ -235,8 +238,10 @@ class MemoryServiceTests(unittest.TestCase):
         )
 
         snapshot = service.snapshot(workspace_id)
+        assert snapshot.workspace_understanding is not None
         self.assertIsNotNone(snapshot.workspace_understanding)
         self.assertIsNotNone(snapshot.workspace_understanding.first_look_summary)
+        assert snapshot.workspace_understanding.first_look_summary is not None
         self.assertEqual(snapshot.workspace_understanding.first_look_summary.folder_role, "empty_new_project")
         self.assertEqual(
             snapshot.workspace_understanding.first_look_summary.recommended_next_step,
@@ -424,6 +429,7 @@ class MemoryServiceTests(unittest.TestCase):
         self.assertIn("session restore", snapshot.current_focus.lower())
         self.assertTrue(any("session restore" in item.lower() for item in snapshot.teaching_observations))
         self.assertTrue(any("Name the blocker before widening scope." in item for item in snapshot.teaching_observations))
+        assert snapshot.active_thread is not None
         self.assertEqual(snapshot.active_thread.decision, "Keep the live thread narrow until the restore path is verified.")
         self.assertEqual(snapshot.active_thread.teaching_note, "Name the blocker before widening scope.")
         self.assertEqual(snapshot.active_thread.confidence, "high")
@@ -460,6 +466,7 @@ class MemoryServiceTests(unittest.TestCase):
         self.assertEqual(workspace.get("preferred_rhythm"), "steady")
         self.assertIn("Trainer 插件继续打磨", str(workspace.get("preferred_stack") or ""))
         self.assertIn("长期代码教练", str(workspace.get("onboarding_request") or ""))
+        assert profile is not None
         self.assertEqual(profile.target_project, "Trainer 插件改造")
 
     def test_learning_outcome_repeated_failure_increases_weakness_pressure(self) -> None:
@@ -814,21 +821,21 @@ class MemoryServiceTests(unittest.TestCase):
         )
         selected_ids = [item.id for item in selected]
         self.assertIn(successful.id, selected_ids)
-        success_rank = rebuilt._teaching_asset_rank(  # type: ignore[attr-defined]
+        success_rank = rebuilt._teaching_asset_rank(
             success_asset,
             workspace_id=workspace_id,
             scenario="review_reflection",
             normalized_focus=stronger_focus,
             normalized_query="startup wiring next recovery step",
-            focus_tokens=rebuilt._teaching_asset_tokens("startup wiring next recovery step"),  # type: ignore[attr-defined]
+            focus_tokens=rebuilt._teaching_asset_tokens("startup wiring next recovery step"),
         )
-        failure_rank = rebuilt._teaching_asset_rank(  # type: ignore[attr-defined]
+        failure_rank = rebuilt._teaching_asset_rank(
             failure_asset,
             workspace_id=workspace_id,
             scenario="review_reflection",
             normalized_focus=stronger_focus,
             normalized_query="startup wiring next recovery step",
-            focus_tokens=rebuilt._teaching_asset_tokens("startup wiring next recovery step"),  # type: ignore[attr-defined]
+            focus_tokens=rebuilt._teaching_asset_tokens("startup wiring next recovery step"),
         )
         self.assertGreater(success_rank, failure_rank)
 
@@ -901,6 +908,7 @@ class MemoryServiceTests(unittest.TestCase):
         evidence = service.memory_evidence(workspace_id, limit=4)
         snapshot = service.snapshot(workspace_id)
         self.assertIsNotNone(snapshot.active_thread)
+        assert snapshot.active_thread is not None
         self.assertTrue(evidence[0].startswith("Last verified result:"))
         self.assertTrue(evidence[1].startswith("Current blocker:"))
         self.assertTrue(evidence[2].startswith("Continue startup wiring with this next move:"))
@@ -993,6 +1001,7 @@ class MemoryServiceTests(unittest.TestCase):
 
         snapshot = service.snapshot(workspace_id)
 
+        assert snapshot.active_thread is not None
         self.assertEqual(snapshot.active_thread.focus_area, "session continuity")
         self.assertEqual(snapshot.coach_anchor, "session continuity")
         self.assertIn("Wire the latest restored session id into runtime recovery.", snapshot.current_focus)
@@ -1039,6 +1048,7 @@ class MemoryServiceTests(unittest.TestCase):
         snapshot = service.snapshot(workspace_id)
 
         self.assertIsNotNone(snapshot.active_thread)
+        assert snapshot.active_thread is not None
         self.assertEqual(
             snapshot.active_thread.verified_result,
             "Verified the first persistence write path.",
@@ -1104,7 +1114,7 @@ class MemoryServiceTests(unittest.TestCase):
             summary="消息流需要更凝练。",
             next_step="先只保留一条主线和一个展开入口。",
             response_language="zh-CN",
-            coach_defaults=CoachDefaults(memory_scope="personal"),
+            coach_defaults=CoachDefaults(memoryScope="personal"),
         )
 
         rebuilt = MemoryService(TrainerRepository(database_path))
@@ -1140,11 +1150,12 @@ class MemoryServiceTests(unittest.TestCase):
             summary="消息流要更轻。",
             next_step="先去掉最抢注意力的辅助块。",
             response_language="zh-CN",
-            coach_defaults=CoachDefaults(memory_scope="personal"),
+            coach_defaults=CoachDefaults(memoryScope="personal"),
         )
 
         snapshot = service.snapshot("workspace-b")
 
+        assert snapshot.active_thread is not None
         self.assertEqual(snapshot.active_thread.focus_area, "message density")
         self.assertIn("message density", snapshot.current_focus.lower())
         self.assertNotIn("api boundaries", snapshot.current_focus.lower())
@@ -1180,11 +1191,11 @@ class MemoryServiceTests(unittest.TestCase):
             next_step="Do the smallest verified step.",
             response_language="en-US",
             coach_defaults=CoachDefaults(
-                memory_scope="session",
-                working_set_mode="focused",
-                review_cadence="active",
-                review_reminder_mode="ahead",
-                workspace_memory_toggles={"decisions": False, "patterns": False, "resources": False},
+                memoryScope="session",
+                workingSetMode="focused",
+                reviewCadence="active",
+                reviewReminderMode="ahead",
+                workspaceMemoryToggles=WorkspaceMemoryToggles(decisions=False, patterns=False, resources=False),
             ),
         )
 
@@ -1249,7 +1260,7 @@ class MemoryServiceTests(unittest.TestCase):
             summary="先把消息流折叠逻辑做简单。",
             next_step="先只保留正文和一个展开入口。",
             response_language="zh-CN",
-            coach_defaults=CoachDefaults(memory_scope="personal"),
+            coach_defaults=CoachDefaults(memoryScope="personal"),
         )
         service.record_coaching_reflection(
             workspace_id="workspace-b",
@@ -1267,6 +1278,7 @@ class MemoryServiceTests(unittest.TestCase):
 
         snapshot = service.snapshot("workspace-b")
 
+        assert snapshot.active_thread is not None
         self.assertEqual(snapshot.active_thread.focus_area, "streaming ui")
         self.assertTrue(
             "个人长期记忆" in snapshot.current_focus or "memory scope is personal" in snapshot.current_focus.lower()
@@ -1377,6 +1389,7 @@ class MemoryServiceTests(unittest.TestCase):
 
         snapshot = service.snapshot(workspace_id)
 
+        assert snapshot.active_thread is not None
         self.assertEqual(snapshot.active_thread.next_step, bare_next_step)
         self.assertEqual(snapshot.current_focus.count(bare_next_step), 1)
         self.assertNotIn("下一步是：下一步：", snapshot.current_focus)
@@ -1415,11 +1428,12 @@ class MemoryServiceTests(unittest.TestCase):
             summary="消息流需要更轻。",
             next_step="先去掉最抢注意力的辅助模块。",
             response_language="zh-CN",
-            coach_defaults=CoachDefaults(memory_scope="personal"),
+            coach_defaults=CoachDefaults(memoryScope="personal"),
         )
 
         rebuilt = MemoryService(TrainerRepository(database_path))
         snapshot = rebuilt.snapshot("workspace-live")
+        assert snapshot.active_thread is not None
 
         self.assertEqual(snapshot.active_thread.focus_area, "message density")
         self.assertTrue(
@@ -1444,10 +1458,10 @@ class MemoryServiceTests(unittest.TestCase):
             response_language="zh-CN",
             answer_mode="guided",
             coach_defaults=CoachDefaults(
-                memory_scope="project",
-                working_set_mode="focused",
-                review_cadence="active",
-                review_reminder_mode="ahead",
+                memoryScope="project",
+                workingSetMode="focused",
+                reviewCadence="active",
+                reviewReminderMode="ahead",
             ),
         )
 
@@ -1457,6 +1471,7 @@ class MemoryServiceTests(unittest.TestCase):
         self.assertEqual(snapshot.workspace.get("response_language"), "zh-CN")
         self.assertEqual(snapshot.workspace.get("answer_mode"), "guided")
         self.assertEqual(snapshot.workspace.get("coach_defaults", {}).get("working_set_mode"), "focused")
+        assert snapshot.active_thread is not None
         self.assertEqual(snapshot.active_thread.focus_area, "coach-first continuity")
         self.assertIn("Resume the same tiny verified slice after restart.", snapshot.active_thread.next_step)
 
@@ -1470,10 +1485,10 @@ class MemoryServiceTests(unittest.TestCase):
         session_id = "session-review-rhythm-continuity"
 
         defaults = CoachDefaults(
-            memory_scope="project",
-            working_set_mode="focused",
-            review_cadence="active",
-            review_reminder_mode="ahead",
+            memoryScope="project",
+            workingSetMode="focused",
+            reviewCadence="active",
+            reviewReminderMode="ahead",
         )
         service.record_turn_memory(
             workspace_id=workspace_id,
@@ -1501,6 +1516,8 @@ class MemoryServiceTests(unittest.TestCase):
         )
         second_snapshot = service.snapshot(workspace_id)
 
+        assert first_snapshot.active_thread is not None
+        assert second_snapshot.active_thread is not None
         self.assertEqual(first_snapshot.active_thread.focus_area, "startup wiring")
         self.assertEqual(second_snapshot.active_thread.focus_area, "startup wiring")
         self.assertIn("startup wiring", second_snapshot.coach_anchor.lower())

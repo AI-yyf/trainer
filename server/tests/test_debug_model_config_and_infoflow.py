@@ -70,21 +70,21 @@ def test_provider_payload_distinguishes_empty_key_and_preserves_local_no_auth_an
 def test_keyless_local_provider_allows_lm_studio_and_explicit_mode_only() -> None:
     lm_studio = ProviderConfig(
         name="Local Model",
-        base_url="http://127.0.0.1:1234/v1",
-        api_key_ref="",
+        baseUrl="http://127.0.0.1:1234/v1",
+        apiKeyRef="",
         model="qwen2.5-coder",
     )
     explicit = ProviderConfig(
         name="Private Relay",
-        base_url="http://127.0.0.1:9000/v1",
-        api_key_ref="",
+        baseUrl="http://127.0.0.1:9000/v1",
+        apiKeyRef="",
         model="demo",
-        credential_mode="local_no_auth",
+        credentialMode="local_no_auth",
     )
     private_relay = ProviderConfig(
         name="Private Relay",
-        base_url="http://127.0.0.1:9000/v1",
-        api_key_ref="",
+        baseUrl="http://127.0.0.1:9000/v1",
+        apiKeyRef="",
         model="demo",
     )
     assert _allows_keyless_local_provider(lm_studio) is True
@@ -113,16 +113,16 @@ def test_clamp_anthropic_thinking_budget_and_protocol_scoped_learning() -> None:
     cfg_chat = ProviderConfig(
         name="GW",
         protocol="openai_chat_completions_compatible",
-        base_url="https://gw.example/v1",
+        baseUrl="https://gw.example/v1",
         model="model-x",
-        api_key_ref="",
+        apiKeyRef="",
     )
     cfg_anthropic = ProviderConfig(
         name="GW",
         protocol="anthropic_messages",
-        base_url="https://gw.example/v1",
+        baseUrl="https://gw.example/v1",
         model="model-x",
-        api_key_ref="",
+        apiKeyRef="",
     )
     remember_policy(cfg_chat, "disabled")
     remember_param_repairs(cfg_chat, ("max_tokens", "temperature"))
@@ -154,9 +154,9 @@ def test_error_classification_json_decode_and_4xx_reachability() -> None:
 def test_describe_attachment_delivery_ignores_vision_when_no_attachments() -> None:
     cfg = ProviderConfig(
         name="TextOnly",
-        base_url="https://api.example.com/v1",
+        baseUrl="https://api.example.com/v1",
         model="text-only-model",
-        api_key_ref="",
+        apiKeyRef="",
         capabilities=CapabilityFlags(vision=False, chat=True),
     )
     service = ProviderService(config=cfg, api_key="sk-test")
@@ -171,9 +171,9 @@ async def test_negotiated_chat_completion_repairs_multiple_params_and_caches() -
     cfg = ProviderConfig(
         name="ReasoningGW",
         protocol="openai_chat_completions_compatible",
-        base_url="https://reasoning.example/v1",
+        baseUrl="https://reasoning.example/v1",
         model="o3-mini",
-        api_key_ref="",
+        apiKeyRef="",
     )
     service = ProviderService(config=cfg, api_key="sk-test")
 
@@ -259,9 +259,9 @@ def test_four_protocol_reasoning_replay_preserves_provider_blocks() -> None:
 
 
 def test_capability_cache_key_exact_transport_matching() -> None:
-    cfg_4 = ProviderConfig(name="A", base_url="https://api.example.com", model="gpt-4", api_key_ref="")
-    cfg_4o = ProviderConfig(name="B", base_url="https://api.example.com", model="gpt-4o", api_key_ref="")
-    cfg_v2 = ProviderConfig(name="C", base_url="https://api.example.com/v2", model="gpt-4", api_key_ref="")
+    cfg_4 = ProviderConfig(name="A", baseUrl="https://api.example.com", model="gpt-4", apiKeyRef="")
+    cfg_4o = ProviderConfig(name="B", baseUrl="https://api.example.com", model="gpt-4o", apiKeyRef="")
+    cfg_v2 = ProviderConfig(name="C", baseUrl="https://api.example.com/v2", model="gpt-4", apiKeyRef="")
 
     key_4o = _provider_capability_cache_key(cfg_4o, "sk-1")
     key_v2 = _provider_capability_cache_key(cfg_v2, "sk-1")
@@ -331,7 +331,9 @@ def test_text_helpers_fences_japanese_mojibake_and_encoding_qa() -> None:
 
 @pytest.mark.asyncio
 async def test_agent_loop_stream_enforces_step_timeout() -> None:
-    async def _stalled_stream(_history: list[dict[str, object]], _tools: list[dict[str, object]]):
+    async def _stalled_stream(
+        _history: list[dict[str, object]], _tools: list[dict[str, object]] | None
+    ):
         await asyncio.sleep(5)
         yield {"type": "delta", "delta": "never"}
 

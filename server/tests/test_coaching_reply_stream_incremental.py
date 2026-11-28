@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from app.core.models import ProviderConfig, UserProfile
+from app.core.models import CapabilityFlags, ProviderConfig, UserProfile
 from app.llm.provider_service import ProviderService
 
 
@@ -32,10 +32,10 @@ def _profile() -> UserProfile:
 def _config() -> ProviderConfig:
     return ProviderConfig(
         name="incremental-stream",
-        base_url="http://127.0.0.1:9/v1",
-        api_key_ref="trainer.default",
+        baseUrl="http://127.0.0.1:9/v1",
+        apiKeyRef="trainer.default",
         model="gpt-4o-mini",
-        capabilities={"chat": True, "streaming": True},
+        capabilities=CapabilityFlags(chat=True, streaming=True),
     )
 
 
@@ -135,9 +135,18 @@ async def test_empty_stream_escalates_the_budget_once_and_recovers() -> None:
 
     budgets: list[int | None] = []
 
-    async def fake_create(**kwargs: object) -> tuple[Any, None]:
-        budgets.append(kwargs.get("max_tokens"))
-        if kwargs.get("stream"):
+    # Same keyword contract as ProviderService._create_chat_completion.
+    async def fake_create(
+        *,
+        client: object,
+        messages: list[dict[str, Any]],
+        model: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+        stream: bool = False,
+    ) -> tuple[Any, None]:
+        budgets.append(max_tokens)
+        if stream:
             return await empty_stream()
         message = SimpleNamespace(content="Recovered visible answer.", tool_calls=[])
         choice = SimpleNamespace(message=message, finish_reason="stop")

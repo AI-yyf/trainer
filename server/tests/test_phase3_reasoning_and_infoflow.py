@@ -63,11 +63,11 @@ def test_agent_binding_applies_reasoning_effort_to_anthropic_and_gemini_and_resp
     def _binding(protocol: str, effort: str) -> ProviderAgentBinding:
         config = ProviderConfig(
             name="phase3-effort",
-            base_url="https://api.example.com/v1",
-            api_key_ref="trainer.phase3",
+            baseUrl="https://api.example.com/v1",
+            apiKeyRef="trainer.phase3",
             model="demo-model",
             protocol=protocol,  # type: ignore[arg-type]
-            request_defaults={"reasoning_effort": effort},
+            requestDefaults={"reasoning_effort": effort},
         )
         fake_service = SimpleNamespace(_config=config, _api_key="sk-test")
         return ProviderAgentBinding(provider_service=fake_service)

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// CI-equivalent server type gate: `python -m pyright app` from server/ with the
+// CI-equivalent server type gate: `python -m pyright app tests` from server/ with the
 // project venv interpreter, cross-platform (.venv/bin/python or
 // .venv/Scripts/python.exe). Exit code is passed through unchanged — zero
 // tolerance, no partial credit.
 //
-// Mirrors .github/workflows/ci.yml:51-53.
+// Mirrors the "Pyright (server)" step in .github/workflows/ci.yml.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -41,7 +41,7 @@ function main() {
     );
     process.exit(2);
   }
-  const result = spawnSync(python, ["-m", "pyright", "app"], {
+  const result = spawnSync(python, ["-m", "pyright", "app", "tests"], {
     cwd: serverRoot,
     stdio: "inherit",
     env: process.env,

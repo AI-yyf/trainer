@@ -34,13 +34,13 @@ def verified_capability_result(*, tools: bool = True, vision: bool = False) -> P
     return ProviderTestResponse(
         ok=True,
         detail="test fixture: observed streaming, tool, and optional vision capability",
-        capability_evidence=evidence,
-        streaming_ready=True,
-        stream_probe_status="verified",
-        tools_ready=tools,
-        tool_probe_status="verified" if tools else "disabled",
-        vision_ready=vision,
-        vision_probe_status="verified" if vision else "unverified",
+        capabilityEvidence=evidence,
+        streamingReady=True,
+        streamProbeStatus="verified",
+        toolsReady=tools,
+        toolProbeStatus="verified" if tools else "disabled",
+        visionReady=vision,
+        visionProbeStatus="verified" if vision else "unverified",
     )
 
 

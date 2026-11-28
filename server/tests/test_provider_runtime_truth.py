@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.core.models import ProviderConfig, UserProfile
+from app.core.models import ProviderConfig, ProviderProtocol, UserProfile
 from app.llm.agent_binding import ProviderAgentBinding
 from app.llm.provider_service import ProviderRuntimeResponseError, ProviderService
 
@@ -20,11 +20,11 @@ def _profile() -> UserProfile:
     )
 
 
-def _config(protocol: str = "openai_chat_completions") -> ProviderConfig:
+def _config(protocol: ProviderProtocol = "openai_chat_completions") -> ProviderConfig:
     return ProviderConfig(
         name="runtime-truth-test",
-        base_url="https://gateway.example.com/v1",
-        api_key_ref="trainer.runtime-truth",
+        baseUrl="https://gateway.example.com/v1",
+        apiKeyRef="trainer.runtime-truth",
         model="test-model",
         protocol=protocol,
     )
@@ -193,11 +193,13 @@ async def test_openai_binding_retries_truncated_formal_plan_arguments(streaming:
     client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
     binding = ProviderAgentBinding(provider_service=service, max_tokens=1024)
     provider = binding.build_agent_provider()
+    call_stream = provider.call_stream
+    assert call_stream is not None
     messages = [{"role": "user", "content": "Save the plan I confirmed."}]
     tools = [{"type": "function", "function": {"name": tool_name}}]
     with patch.object(service, "_get_client", return_value=client):
         if streaming:
-            events = [event async for event in provider.call_stream(messages, tools)]
+            events = [event async for event in call_stream(messages, tools)]
             assert [event["type"] for event in events] == ["final"]
             result = events[0]
         else:
@@ -228,11 +230,13 @@ async def test_openai_binding_stream_does_not_emit_a_final_event_for_truncated_o
         chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock(return_value=_stream())))
     )
     binding = ProviderAgentBinding(provider_service=service)
+    call_stream = binding.build_agent_provider().call_stream
+    assert call_stream is not None
     events: list[dict[str, object]] = []
 
     with patch.object(service, "_get_client", return_value=client):
         with pytest.raises(ProviderRuntimeResponseError) as raised:
-            async for event in binding.build_agent_provider().call_stream(
+            async for event in call_stream(
                 [{"role": "user", "content": "hello"}],
                 None,
             ):
@@ -310,7 +314,9 @@ async def test_coaching_reply_stream_retries_truncation_only_before_visible_text
     else:
         assert create.await_count == 1
         assert complete not in visible
-        assert service.peek_last_reply_failure()["error_category"] == "truncated_or_empty"
+        failure = service.peek_last_reply_failure()
+        assert failure is not None
+        assert failure["error_category"] == "truncated_or_empty"
 
 
 @pytest.mark.asyncio
@@ -338,7 +344,9 @@ async def test_resources_analysis_has_room_for_comparisons_within_provider_limit
             coach_context={"active_view": "resources", "resource_composer_intent": {"mode": mode}},
         ):
             pass
-    assert create.await_args.kwargs["max_tokens"] == expected_tokens
+    first_call = create.await_args
+    assert first_call is not None
+    assert first_call.kwargs["max_tokens"] == expected_tokens
 
 
 def test_binding_http_error_redacts_upstream_body_and_credentials() -> None:

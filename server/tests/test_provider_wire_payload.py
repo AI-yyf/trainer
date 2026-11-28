@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.core.models import CapabilityFlags, ProviderConfig
+from app.core.models import CapabilityFlags, ProviderConfig, ProviderProtocol
 from app.llm.agent_binding import ProviderAgentBinding
 from app.llm.provider_service import ProviderService
 
@@ -12,11 +12,11 @@ from app.llm.provider_service import ProviderService
 async def test_anthropic_wire_thinking_overrides_legacy_budget() -> None:
     config = ProviderConfig(
         name="compatible-minimax",
-        base_url="https://gateway.example/v1",
-        api_key_ref="trainer.test",
+        baseUrl="https://gateway.example/v1",
+        apiKeyRef="trainer.test",
         model="MiniMax-M3",
         protocol="anthropic_messages",
-        request_defaults={
+        requestDefaults={
             "thinkingBudget": 2048,
             "thinking": {"type": "disabled"},
         },
@@ -38,11 +38,11 @@ async def test_anthropic_wire_thinking_overrides_legacy_budget() -> None:
 async def test_openai_wire_payload_keeps_defaults_for_stream_and_tools() -> None:
     config = ProviderConfig(
         name="compatible-provider",
-        base_url="https://gateway.example/v1",
-        api_key_ref="trainer.test",
+        baseUrl="https://gateway.example/v1",
+        apiKeyRef="trainer.test",
         model="model-1",
         protocol="openai_chat_completions_compatible",
-        request_defaults={
+        requestDefaults={
             "maxOutputTokens": 321,
             "extra_body": {"thinking": {"type": "disabled"}},
         },
@@ -67,14 +67,14 @@ async def test_openai_wire_payload_keeps_defaults_for_stream_and_tools() -> None
     assert kwargs["tools"][0]["function"]["name"] == "probe"
 
 
-def _binding_with_defaults(protocol: str, defaults: dict[str, object]) -> ProviderAgentBinding:
+def _binding_with_defaults(protocol: ProviderProtocol, defaults: dict[str, object]) -> ProviderAgentBinding:
     config = ProviderConfig(
         name=f"wire-{protocol}",
-        base_url="https://gateway.example/v1",
-        api_key_ref="trainer.test",
+        baseUrl="https://gateway.example/v1",
+        apiKeyRef="trainer.test",
         model="wire-model",
         protocol=protocol,
-        request_defaults=defaults,
+        requestDefaults=defaults,
     )
     return ProviderAgentBinding(
         provider_service=ProviderService(config=config, api_key="test-only"),
@@ -108,8 +108,8 @@ def test_openai_responses_defaults_map_temperature_stop_and_reasoning() -> None:
 def test_minimax_explicit_thinking_enabled_survives_request_defaults() -> None:
     config = ProviderConfig(
         name="MiniMax",
-        base_url="https://api.minimaxi.com/v1",
-        api_key_ref="trainer.test",
+        baseUrl="https://api.minimaxi.com/v1",
+        apiKeyRef="trainer.test",
         model="MiniMax-M2.7",
         protocol="openai_chat_completions_compatible",
         capabilities=CapabilityFlags(
@@ -119,7 +119,7 @@ def test_minimax_explicit_thinking_enabled_survives_request_defaults() -> None:
             vision=False,
             thinking=True,
         ),
-        request_defaults={"extra_body": {"thinking": {"type": "enabled"}, "option": "keep"}},
+        requestDefaults={"extra_body": {"thinking": {"type": "enabled"}, "option": "keep"}},
     )
     service = ProviderService(config=config, api_key="test-only")
     payload = service._apply_request_defaults(
@@ -164,8 +164,8 @@ def test_raw_http_minimax_thinking_is_flattened_off_extra_body() -> None:
 
     provider = ProviderConfig(
         name="MiniMax",
-        base_url="http://gateway.example/v1",
-        api_key_ref="trainer.test",
+        baseUrl="http://gateway.example/v1",
+        apiKeyRef="trainer.test",
         model="MiniMax-M3",
         protocol="anthropic_messages",
     )
@@ -187,8 +187,8 @@ def test_raw_http_unknown_provider_does_not_invent_thinking() -> None:
 
     provider = ProviderConfig(
         name="unknown-gateway",
-        base_url="https://llm.example/v1",
-        api_key_ref="trainer.test",
+        baseUrl="https://llm.example/v1",
+        apiKeyRef="trainer.test",
         model="mystery-model",
         protocol="openai_chat_completions_compatible",
     )
@@ -207,11 +207,11 @@ def test_unknown_minimax_named_model_does_not_invent_thinking() -> None:
 
     provider = ProviderConfig(
         name="MiniMax",
-        base_url="http://minimax-gateway.test/v1",
-        api_key_ref="trainer.test",
+        baseUrl="http://minimax-gateway.test/v1",
+        apiKeyRef="trainer.test",
         model="mystery-custom-7b",
         protocol="openai_chat_completions_compatible",
-        request_defaults={"extra_body": {"thinking": {"type": "enabled"}, "keep": "yes"}},
+        requestDefaults={"extra_body": {"thinking": {"type": "enabled"}, "keep": "yes"}},
     )
     defaults = _normalized_provider_request_defaults(provider)
     extra_body = defaults.get("extra_body") or {}
@@ -232,12 +232,12 @@ def test_confirmed_minimax_model_keeps_native_thinking_field() -> None:
 
     provider = ProviderConfig(
         name="MiniMax",
-        base_url="http://minimax-gateway.test/v1",
-        api_key_ref="trainer.test",
+        baseUrl="http://minimax-gateway.test/v1",
+        apiKeyRef="trainer.test",
         model="MiniMax-M2.7",
         protocol="openai_chat_completions_compatible",
         capabilities=CapabilityFlags(chat=True, thinking=True),
-        request_defaults={"extra_body": {"thinking": {"type": "enabled"}}},
+        requestDefaults={"extra_body": {"thinking": {"type": "enabled"}}},
     )
     defaults = _normalized_provider_request_defaults(provider)
     assert defaults["extra_body"]["thinking"] == {"type": "enabled"}
@@ -247,11 +247,11 @@ def test_confirmed_minimax_model_keeps_native_thinking_field() -> None:
 def test_anthropic_http_defaults_drop_nested_minimax_extra_body_thinking() -> None:
     config = ProviderConfig(
         name="MiniMax",
-        base_url="http://gateway.example/v1",
-        api_key_ref="trainer.test",
+        baseUrl="http://gateway.example/v1",
+        apiKeyRef="trainer.test",
         model="MiniMax-M3",
         protocol="anthropic_messages",
-        request_defaults={"extra_body": {"thinking": {"type": "disabled"}, "option": "keep"}},
+        requestDefaults={"extra_body": {"thinking": {"type": "disabled"}, "option": "keep"}},
     )
     binding = ProviderAgentBinding(
         provider_service=ProviderService(config=config, api_key="test-only"),

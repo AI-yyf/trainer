@@ -656,7 +656,9 @@ async def test_dual_channel_tool_output_separates_llm_content_from_ui_details() 
         {"content": "Saved cleanly.", "tool_calls": []},
     ]
 
-    async def _call(messages: list[dict[str, Any]], _tools: list[dict[str, Any]]) -> dict[str, Any]:
+    async def _call(
+        messages: list[dict[str, Any]], _tools: list[dict[str, Any]] | None
+    ) -> dict[str, Any]:
         seen_messages.append([dict(m) for m in messages])
         return responses[len(seen_messages) - 1]
 
@@ -830,7 +832,9 @@ async def test_provider_usage_compaction_math_inf_overflow_and_mid_batch_steerin
 
     call_idx = 0
 
-    async def _provider_call(messages: list[dict[str, Any]], _tools: list[dict[str, Any]]) -> dict[str, Any]:
+    async def _provider_call(
+        messages: list[dict[str, Any]], _tools: list[dict[str, Any]] | None
+    ) -> dict[str, Any]:
         nonlocal call_idx
         call_idx += 1
         if call_idx == 1:
@@ -998,7 +1002,9 @@ async def test_four_protocol_streaming_usage_feeds_agent_loop() -> None:
         "data: " + json.dumps({"type": "message_stop"}),
     ]
     with patch.object(anth_binding, "_async_http_client", return_value=_FakeHTTP(anth_lines)):
-        anth_events = [ev async for ev in anth_binding.build_agent_provider().call_stream([_user("hi")], None)]
+        anth_provider = anth_binding.build_agent_provider()
+        assert anth_provider.call_stream is not None
+        anth_events = [ev async for ev in anth_provider.call_stream([_user("hi")], None)]
     assert anth_events[-1]["usage"]["input_tokens"] == 100
     assert anth_events[-1]["usage"]["output_tokens"] == 25
     assert anth_events[-1]["usage"]["cache_read_tokens"] == 30
@@ -1028,7 +1034,9 @@ async def test_four_protocol_streaming_usage_feeds_agent_loop() -> None:
         }),
     ]
     with patch.object(gem_binding, "_async_http_client", return_value=_FakeHTTP(gem_lines)):
-        gem_events = [ev async for ev in gem_binding.build_agent_provider().call_stream([_user("hi")], None)]
+        gem_provider = gem_binding.build_agent_provider()
+        assert gem_provider.call_stream is not None
+        gem_events = [ev async for ev in gem_provider.call_stream([_user("hi")], None)]
     assert gem_events[-1]["usage"]["input_tokens"] == 180
     assert gem_events[-1]["usage"]["output_tokens"] == 16
     assert gem_events[-1]["usage"]["reasoning_tokens"] == 7

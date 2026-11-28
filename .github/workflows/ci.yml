@@ -59,7 +59,7 @@ jobs:
 
       - name: Pyright (server)
         working-directory: server
-        run: .venv/bin/python -m pyright app
+        run: .venv/bin/python -m pyright app tests
 
       - name: Bundled server parity gate
         run: |

@@ -7,10 +7,12 @@ from pathlib import Path
 from typing import Any, AsyncIterator
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from provider_fixtures import seed_verified_capabilities
 
-from app.core.models import ProviderConfig, TrainingCardCandidateSnapshot
+from app.api.runtime import TrainerRuntime
+from app.core.models import CapabilityFlags, ProviderConfig, TrainingCardCandidateSnapshot
 from app.core.settings import AppSettings
 from app.llm.provider_service import ProviderService
 from app.main import create_app
@@ -29,6 +31,19 @@ def build_client(tmp_path: Path) -> TestClient:
         enable_network_fetch=False,
     )
     return TestClient(create_app(settings))
+
+
+def _runtime(client: TestClient) -> TrainerRuntime:
+    """The sidecar runtime behind a test client.
+
+    Starlette declares ``TestClient.app`` as the ``ASGIApp`` callable union, so the
+    ``FastAPI`` (and runtime) narrowing has to happen at runtime before ``.state``.
+    """
+    application = client.app
+    assert isinstance(application, FastAPI), "test client must wrap the Trainer FastAPI app"
+    runtime = application.state.runtime
+    assert isinstance(runtime, TrainerRuntime), "FastAPI app must expose a TrainerRuntime"
+    return runtime
 
 
 def _pair_browser(client: TestClient, workspace_id: str, code: str = "135790") -> str:
@@ -104,21 +119,21 @@ def test_browser_chat_streams_a_reply_into_the_paired_conversation(
     with build_client(tmp_path) as client:
         _script_provider(monkeypatch, reply)
 
-        runtime = client.app.state.runtime
+        runtime = _runtime(client)
         provider = ProviderConfig(
             name="browser-chat-test",
-            base_url="http://127.0.0.1:9/v1",
-            api_key_ref="trainer.browser-chat",
+            baseUrl="http://127.0.0.1:9/v1",
+            apiKeyRef="trainer.browser-chat",
             model="gpt-4o-mini",
-            capabilities={
-                "chat": True,
-                "responses": True,
-                "vision": False,
-                "embeddings": True,
-                "tools": False,
-                "json_schema": False,
-                "streaming": True,
-            },
+            capabilities=CapabilityFlags(
+                chat=True,
+                responses=True,
+                vision=False,
+                embeddings=True,
+                tools=False,
+                jsonSchema=False,
+                streaming=True,
+            ),
         )
         runtime.provider_config = provider
         runtime.provider_api_key = "sk-test"
@@ -205,7 +220,7 @@ def test_browser_chat_records_a_practice_answer_as_a_real_attempt(tmp_path: Path
     with build_client(tmp_path) as client:
         credential = _pair_browser(client, workspace_id)
         headers = {"Authorization": f"Bearer {credential}"}
-        runtime = client.app.state.runtime
+        runtime = _runtime(client)
         runtime.memory_service.upsert_card(
             workspace_id,
             TrainingCardCandidateSnapshot(
@@ -269,6 +284,7 @@ def test_browser_chat_records_a_practice_answer_as_a_real_attempt(tmp_path: Path
         assert workspace.get("workspace_id") == workspace_id
 
         # The attempt survived the whole chain, with the learner's own words.
+        assert runtime.attempt_store is not None
         stored = runtime.attempt_store.get_attempt(attempt_id, workspace_id=workspace_id)
         assert stored is not None
         assert stored.get("answer_draft") == "边界检查已覆盖"
@@ -286,18 +302,18 @@ def test_browser_chat_practice_return_requires_a_bearer_credential(tmp_path: Pat
 def _configure_provider(runtime: Any, *, verified: bool) -> None:
     provider = ProviderConfig(
         name="browser-chat-boundary",
-        base_url="http://127.0.0.1:9/v1",
-        api_key_ref="trainer.browser-chat",
+        baseUrl="http://127.0.0.1:9/v1",
+        apiKeyRef="trainer.browser-chat",
         model="gpt-4o-mini",
-        capabilities={
-            "chat": True,
-            "responses": True,
-            "vision": False,
-            "embeddings": True,
-            "tools": False,
-            "json_schema": False,
-            "streaming": True,
-        },
+        capabilities=CapabilityFlags(
+            chat=True,
+            responses=True,
+            vision=False,
+            embeddings=True,
+            tools=False,
+            jsonSchema=False,
+            streaming=True,
+        ),
     )
     runtime.provider_config = provider
     runtime.provider_api_key = "sk-test"
@@ -344,7 +360,7 @@ def test_browser_chat_cannot_reach_the_evaluator_or_move_the_workspace_root(
     with build_client(tmp_path) as client:
         credential = _pair_browser(client, workspace_id)
         headers = {"Authorization": f"Bearer {credential}"}
-        runtime = client.app.state.runtime
+        runtime = _runtime(client)
         # Saved but never verified: the route that used to fall through to the
         # local evaluator.
         _configure_provider(runtime, verified=False)
@@ -390,7 +406,7 @@ def test_browser_chat_forwards_only_the_allowlisted_fields_to_the_coach(
     with build_client(tmp_path) as client:
         credential = _pair_browser(client, workspace_id)
         headers = {"Authorization": f"Bearer {credential}"}
-        runtime = client.app.state.runtime
+        runtime = _runtime(client)
         _configure_provider(runtime, verified=True)
 
         async def _reply(self: ProviderService, *args: Any, **kwargs: Any) -> str:
@@ -554,7 +570,7 @@ def test_a_chat_payload_cannot_move_a_registered_workspace_root(tmp_path: Path) 
         )
         assert started.status_code == 200, started.text
         session_id = str(started.json()["session_id"])
-        runtime = client.app.state.runtime
+        runtime = _runtime(client)
 
         client.post(
             "/session/message",
@@ -607,7 +623,7 @@ def test_a_paired_browser_cannot_relabel_the_workspace(tmp_path: Path) -> None:
         )
 
         assert response.status_code == 200, response.text
-        runtime = client.app.state.runtime
+        runtime = _runtime(client)
         sessions = [state for state in runtime.sessions.values() if state.workspace_id == workspace_id]
         assert sessions, "the paired workspace session was started"
         assert all(

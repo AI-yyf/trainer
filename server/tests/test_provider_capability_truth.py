@@ -33,8 +33,8 @@ def _vision_evidence(result: ProviderTestResponse):
 def _openai_provider() -> ProviderConfig:
     return ProviderConfig(
         name="capability-truth",
-        base_url="https://gateway.example.com/v1",
-        api_key_ref="trainer.capability-truth",
+        baseUrl="https://gateway.example.com/v1",
+        apiKeyRef="trainer.capability-truth",
         model="test-model",
         protocol="openai_chat_completions_compatible",
         capabilities=CapabilityFlags(
@@ -111,8 +111,8 @@ def test_minimax_vision_probe_ignores_think_text_and_disables_thinking() -> None
     service = ProviderService()
     provider = ProviderConfig(
         name="MiniMax",
-        base_url="http://gateway.example/v1",
-        api_key_ref="trainer.minimax",
+        baseUrl="http://gateway.example/v1",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
         protocol="openai_chat_completions_compatible",
         capabilities=CapabilityFlags(chat=True, vision=True, tools=False, streaming=False),
@@ -141,8 +141,8 @@ def test_minimax_capability_truth_does_not_mark_vision_ready_from_think_text() -
     service = ProviderService()
     provider = ProviderConfig(
         name="MiniMax",
-        base_url="http://gateway.example/v1",
-        api_key_ref="trainer.minimax",
+        baseUrl="http://gateway.example/v1",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M3",
         protocol="openai_chat_completions_compatible",
         capabilities=CapabilityFlags(chat=True, vision=True, thinking=False, tools=False, streaming=False),
@@ -171,7 +171,11 @@ def test_openai_vision_probe_requires_image_and_exact_content() -> None:
 
     def create(**kwargs: object) -> SimpleNamespace:
         messages = kwargs["messages"]
-        content = messages[0]["content"]
+        assert isinstance(messages, list)
+        user_message = messages[0]
+        assert isinstance(user_message, dict)
+        content = user_message["content"]
+        assert isinstance(content, list)
         assert content[0]["text"].startswith("Inspect the supplied image")
         assert content[1]["type"] == "image_url"
         assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")
@@ -196,8 +200,8 @@ def test_openai_vision_probe_requires_image_and_exact_content() -> None:
 def test_anthropic_vision_probe_uses_native_image_block_and_exact_content() -> None:
     provider = ProviderConfig(
         name="anthropic-compatible",
-        base_url="https://gateway.example.com",
-        api_key_ref="trainer.anthropic-compatible",
+        baseUrl="https://gateway.example.com",
+        apiKeyRef="trainer.anthropic-compatible",
         model="test-model",
         protocol="anthropic_messages",
         capabilities=CapabilityFlags(chat=True, vision=True, tools=False, streaming=False),
@@ -242,8 +246,8 @@ def test_anthropic_vision_probe_uses_native_image_block_and_exact_content() -> N
 def test_gemini_vision_probe_uses_native_inline_data_and_exact_content() -> None:
     provider = ProviderConfig(
         name="gemini-native",
-        base_url="https://generativelanguage.googleapis.com/v1beta",
-        api_key_ref="trainer.gemini-native",
+        baseUrl="https://generativelanguage.googleapis.com/v1beta",
+        apiKeyRef="trainer.gemini-native",
         model="gemini-2.0-flash",
         protocol="gemini_generate_content",
         capabilities=CapabilityFlags(chat=True, vision=True, tools=False, streaming=False),
@@ -436,8 +440,8 @@ def test_negative_capability_probe_is_not_retried_into_a_positive_claim() -> Non
 def test_anthropic_tool_probe_uses_forced_noop_tool_without_executing_it() -> None:
     provider = ProviderConfig(
         name="anthropic-compatible",
-        base_url="https://gateway.example.com",
-        api_key_ref="trainer.anthropic-compatible",
+        baseUrl="https://gateway.example.com",
+        apiKeyRef="trainer.anthropic-compatible",
         model="test-model",
         protocol="anthropic_messages",
         capabilities=CapabilityFlags(
@@ -499,8 +503,8 @@ def test_anthropic_tool_probe_uses_forced_noop_tool_without_executing_it() -> No
 def test_streaming_probe_marks_capability_verified_only_after_visible_chunks() -> None:
     provider = ProviderConfig(
         name="stream-capability-truth",
-        base_url="https://gateway.example.com/v1",
-        api_key_ref="trainer.stream-capability-truth",
+        baseUrl="https://gateway.example.com/v1",
+        apiKeyRef="trainer.stream-capability-truth",
         model="test-model",
         protocol="openai_chat_completions_compatible",
         capabilities=CapabilityFlags(
@@ -534,8 +538,8 @@ def test_streaming_probe_marks_capability_verified_only_after_visible_chunks() -
 def test_chat_ok_but_stream_unverified_is_not_streaming_ready() -> None:
     provider = ProviderConfig(
         name="stream-capability-truth",
-        base_url="https://gateway.example.com/v1",
-        api_key_ref="trainer.stream-capability-truth",
+        baseUrl="https://gateway.example.com/v1",
+        apiKeyRef="trainer.stream-capability-truth",
         model="test-model",
         protocol="openai_chat_completions_compatible",
         capabilities=CapabilityFlags(
@@ -574,8 +578,8 @@ def test_chat_ok_but_stream_unverified_is_not_streaming_ready() -> None:
 def test_streaming_probe_returns_after_first_visible_chunk_even_if_stream_never_finishes() -> None:
     provider = ProviderConfig(
         name="stream-capability-truth",
-        base_url="https://gateway.example.com/v1",
-        api_key_ref="trainer.stream-capability-truth",
+        baseUrl="https://gateway.example.com/v1",
+        apiKeyRef="trainer.stream-capability-truth",
         model="test-model",
         protocol="openai_chat_completions_compatible",
         capabilities=CapabilityFlags(
@@ -616,11 +620,11 @@ def test_streaming_probe_returns_after_first_visible_chunk_even_if_stream_never_
 def test_minimax_streaming_probe_uses_generous_visible_budget() -> None:
     provider = ProviderConfig(
         name="MiniMax",
-        base_url="http://minimax.example/v1",
-        api_key_ref="trainer.minimax",
+        baseUrl="http://minimax.example/v1",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M2.7",
         protocol="openai_chat_completions_compatible",
-        connection_type="newapi_channel_conn",
+        connectionType="newapi_channel_conn",
         capabilities=CapabilityFlags(
             chat=True,
             responses=False,
@@ -648,20 +652,20 @@ def test_minimax_streaming_probe_uses_generous_visible_budget() -> None:
 def test_reasoning_first_provider_visible_probes_reserve_a_generous_budget() -> None:
     minimax = ProviderConfig(
         name="MiniMax",
-        base_url="https://api.minimax.example/v1",
-        api_key_ref="trainer.minimax",
+        baseUrl="https://api.minimax.example/v1",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M2.7",
     )
     kimi = ProviderConfig(
         name="Kimi",
-        base_url="https://api.moonshot.example/v1",
-        api_key_ref="trainer.kimi",
+        baseUrl="https://api.moonshot.example/v1",
+        apiKeyRef="trainer.kimi",
         model="moonshot-v1-8k",
     )
     ordinary = ProviderConfig(
         name="ordinary",
-        base_url="https://gateway.example/v1",
-        api_key_ref="trainer.ordinary",
+        baseUrl="https://gateway.example/v1",
+        apiKeyRef="trainer.ordinary",
         model="ordinary-chat-model",
     )
 
@@ -673,11 +677,11 @@ def test_reasoning_first_provider_visible_probes_reserve_a_generous_budget() -> 
 def test_minimax_tools_and_thinking_are_probed_even_when_undeclared() -> None:
     provider = ProviderConfig(
         name="MiniMax",
-        base_url="http://minimax.example/v1",
-        api_key_ref="trainer.minimax",
+        baseUrl="http://minimax.example/v1",
+        apiKeyRef="trainer.minimax",
         model="MiniMax-M2.7",
         protocol="openai_chat_completions_compatible",
-        connection_type="newapi_channel_conn",
+        connectionType="newapi_channel_conn",
         capabilities=CapabilityFlags(
             chat=True,
             tools=False,
@@ -739,8 +743,8 @@ def _evidence(result: ProviderTestResponse, name: str):
 def test_openai_compatible_default_probes_tools_even_when_template_pins_false() -> None:
     provider = ProviderConfig(
         name="Kimi",
-        base_url="https://api.moonshot.cn/v1",
-        api_key_ref="kimi.default",
+        baseUrl="https://api.moonshot.cn/v1",
+        apiKeyRef="kimi.default",
         model="moonshot-v1-8k",
         protocol="openai_chat_completions_compatible",
         capabilities=CapabilityFlags(chat=True, tools=False, streaming=True),
@@ -769,8 +773,8 @@ def test_openai_compatible_default_probes_tools_even_when_template_pins_false() 
 def test_capability_probes_succeed_or_fail_independently() -> None:
     provider = ProviderConfig(
         name="independent-caps",
-        base_url="https://gateway.example.com/v1",
-        api_key_ref="trainer.independent",
+        baseUrl="https://gateway.example.com/v1",
+        apiKeyRef="trainer.independent",
         model="cap-model",
         protocol="openai_chat_completions_compatible",
         capabilities=CapabilityFlags(
@@ -780,8 +784,8 @@ def test_capability_probes_succeed_or_fail_independently() -> None:
             vision=True,
             thinking=True,
             embeddings=True,
-            structured_output=True,
-            json_schema=True,
+            structuredOutput=True,
+            jsonSchema=True,
         ),
     )
     service = ProviderService()
