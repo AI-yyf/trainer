@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import asdict, is_dataclass
 
@@ -82,6 +83,8 @@ from ..router_support import (
 )
 from ..training_skill_evidence import record_executed_training_evidence
 from ._base import RouterDomainBase
+
+logger = logging.getLogger(__name__)
 
 
 class PedagogyAndEvaluationDomainMixin(RouterDomainBase):
@@ -1500,7 +1503,8 @@ class PedagogyAndEvaluationDomainMixin(RouterDomainBase):
         """Learner language stored with the workspace (settings gear is canonical)."""
         try:
             memory = self.runtime.memory_service.snapshot(workspace_id)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to read workspace response_language for %s: %s", workspace_id, exc)
             return None
         workspace = memory.workspace if isinstance(memory.workspace, dict) else {}
         saved = str(workspace.get("response_language") or "").strip()

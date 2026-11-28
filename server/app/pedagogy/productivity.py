@@ -7,10 +7,13 @@ into endless explanation. Explicit ``direct_answer`` requests are exempt.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 _PRODUCTIVE_METADATA_KEYS = (
     "completed_training_return_feedback",
@@ -120,7 +123,8 @@ def recent_ledger_learning_output(
         return (False, False)
     try:
         entries = recent_fn(workspace_id, limit=25)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Failed to read recent productivity entries for %s: %s", workspace_id, exc)
         return (False, False)
     has_attempt_or_evidence = False
     has_review = False

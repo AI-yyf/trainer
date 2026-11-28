@@ -127,7 +127,8 @@ class CanonicalAndCollectionMixin:
         if callable(delete_text):
             try:
                 semantic_removed = bool(delete_text(resource_id))
-            except Exception:
+            except Exception as exc:
+                logger.debug("Failed to delete semantic index for resource %s: %s", resource_id, exc)
                 semantic_removed = False
 
         self.registry._resources.pop(resource_id, None)
@@ -937,6 +938,7 @@ class CanonicalAndCollectionMixin:
                         child_request, vision_enabled=False
                     )
                 except Exception as exc:  # noqa: BLE001 - one bad item must not kill the folder
+                    logger.warning("Folder import item failed (%s): %s", source_item, exc)
                     folder_failures.append({"item": source_item, "error": f"{exc.__class__.__name__}: {exc}"})
                     folder_warnings.append(f"Folder item failed: {source_item} ({exc.__class__.__name__})")
                     continue

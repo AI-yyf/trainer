@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import replace
 from pathlib import Path
@@ -7,6 +8,8 @@ from typing import Any, Sequence, cast
 
 from .embedder import EmbeddingProvider, HashingEmbedder, cosine_similarity
 from .models import MemoryDocument, SearchHit, SemanticCollectionInfo
+
+logger = logging.getLogger(__name__)
 
 
 class SemanticMemory:
@@ -45,7 +48,8 @@ class SemanticMemory:
             self._client = QdrantClient(path=str(self.storage_path))
             self._point_struct = PointStruct
             self._ensure_collection(PointStruct, VectorParams, Distance)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Semantic vector client unavailable, falling back to local search: %s", exc)
             self._client = None
 
     def _ensure_collection(self, PointStruct: Any, VectorParams: Any, Distance: Any) -> None:
@@ -80,7 +84,8 @@ class SemanticMemory:
                 points_selector={"points": [_normalize_point_id(record_id)]},
             )
             return True
-        except Exception:
+        except Exception as exc:
+            logger.debug("Semantic document delete failed: %s", exc)
             return removed
 
     def upsert_documents(self, documents: Sequence[MemoryDocument]) -> None:

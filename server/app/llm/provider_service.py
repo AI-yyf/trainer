@@ -769,7 +769,8 @@ class ProviderService(
             return
         try:
             result = close_fn()
-        except Exception:
+        except Exception as exc:
+            logger.debug("Closing async transport client raised: %s", exc)
             return
         if not asyncio.iscoroutine(result):
             return
@@ -1095,7 +1096,8 @@ class ProviderService(
                 attachments=normalized_attachments,
             )
             delivered = bool(binding.attachments_will_be_sent())
-        except Exception:
+        except Exception as exc:
+            logger.debug("Attachment delivery probe failed: %s", exc)
             delivered = False
 
         return {

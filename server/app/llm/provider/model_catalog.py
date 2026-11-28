@@ -470,6 +470,7 @@ class ModelCatalogMixin:
             try:
                 response = client.get(url, headers=headers, params=params_with_cursor(cursor))
             except Exception as exc:
+                logger.debug("Model catalog page request failed (%s)", exc.__class__.__name__)
                 diagnostics.append(
                     redact_provider_error(
                         exc,
@@ -595,6 +596,7 @@ class ModelCatalogMixin:
                     )
                     return items, True
         except Exception as exc:
+            logger.debug("Model catalog pagination interrupted (%s)", exc.__class__.__name__)
             notes.append(
                 redact_provider_error(
                     exc,
@@ -694,6 +696,7 @@ class ModelCatalogMixin:
             return result
         except Exception as exc:  # pragma: no cover - network dependent
             category, retryable, status_code, _, _ = self._classify_error(exc)
+            logger.warning("Model catalog listing failed (category=%s, status=%s)", category, status_code)
             return ProviderModelsResponse(
                 ok=False,
                 detail=self._detail_from_category(category, provider=provider, error=exc),

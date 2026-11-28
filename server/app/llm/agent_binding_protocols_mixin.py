@@ -175,6 +175,7 @@ class AgentBindingProtocolsMixin:
                         chosen_model = candidate
                         break
                     except Exception as retry_exc:  # noqa: BLE001
+                        logger.debug("Streaming fallback retry failed for %s: %s", candidate, retry_exc.__class__.__name__)
                         exc = retry_exc
                 last_error = exc
                 if not self._provider_service._is_model_not_supported_error(exc):  # noqa: SLF001

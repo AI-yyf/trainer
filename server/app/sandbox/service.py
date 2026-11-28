@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Literal, Mapping
@@ -47,6 +48,8 @@ from .constants import (
 from .container_probe_and_audit_mixin import ContainerProbeAndAuditMixin
 from .egress_and_container_exec_mixin import EgressAndContainerExecMixin
 from .patch_and_skill_run_mixin import PatchAndSkillRunMixin
+
+logger = logging.getLogger(__name__)
 
 
 class SandboxService(
@@ -1076,6 +1079,7 @@ class SandboxService(
                     self._ensure_directory(source.parent)
                     self._move_path(destination, source)
                 except Exception as exc:
+                    logger.warning("Sandbox trash restore rollback failed (%s -> %s): %s", destination, source, exc)
                     rollback_errors.append(str(exc) or "Unable to restore artifact to Trash.")
                 continue
             rollback_errors.append("Resource artifact restore rollback reached an ambiguous path state.")
@@ -1309,7 +1313,8 @@ class SandboxService(
                 preview_result = self._preview_service.get_preview(str(target))
                 if preview_result.html:
                     html = preview_result.html
-            except Exception:
+            except Exception as exc:
+                logger.debug("Sandbox HTML preview rendering failed for %s: %s", target, exc)
                 html = None
         excerpt = body[:1200]
         return SandboxPreview(
@@ -1724,7 +1729,8 @@ class SandboxService(
                     try:
                         if self._path_exists(target):
                             target.rename(source)
-                    except Exception:
+                    except Exception as exc:
+                        logger.warning("Sandbox batch rename rollback failed (%s -> %s): %s", target, source, exc)
                         continue
                 raise
         finally:

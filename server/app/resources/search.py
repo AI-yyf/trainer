@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Protocol, cast
+
+logger = logging.getLogger(__name__)
 
 _CJK_CHAR_CLASS = (
     r"\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\U00020000-\U0002fa1f"
@@ -530,7 +533,8 @@ class SearchIndex:
                     updated = datetime.fromisoformat(str(meta["updated_at"]))
                     if updated.tzinfo is None:
                         updated = updated.replace(tzinfo=timezone.utc)
-                except Exception:
+                except Exception as exc:
+                    logger.debug("Failed to parse resource updated_at timestamp: %s", exc)
                     updated = utc_now() - timedelta(days=365)
 
                 trust = float(meta["trust_score"] or 0.0)
@@ -797,7 +801,8 @@ class SearchIndex:
                     updated = datetime.fromisoformat(str(row["updated_at"]))
                     if updated.tzinfo is None:
                         updated = updated.replace(tzinfo=timezone.utc)
-                except Exception:
+                except Exception as exc:
+                    logger.debug("Failed to parse indexed updated_at timestamp: %s", exc)
                     updated = utc_now()
                 payload = self._parse_json_metadata(row["metadata_json"])
                 preview_tier = str(
@@ -913,7 +918,8 @@ class SearchIndex:
             return {}
         try:
             parsed = json.loads(str(raw))
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to parse resource JSON metadata: %s", exc)
             return {}
         return parsed if isinstance(parsed, dict) else {}
 

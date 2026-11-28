@@ -55,7 +55,8 @@ class WebSearchClient:
                     return results
             except ControlledFetchError as exc:
                 failures.append(exc)
-            except Exception:
+            except Exception as exc:
+                logger.debug("Primary web search provider failed: %s", exc)
                 continue
 
         if not self._site_constraint_domains(query):
@@ -70,7 +71,8 @@ class WebSearchClient:
                         return results
                 except ControlledFetchError as exc:
                     failures.append(exc)
-                except Exception:
+                except Exception as exc:
+                    logger.debug("Fallback web search provider failed: %s", exc)
                     continue
 
         if failures:
@@ -424,7 +426,8 @@ class WebSearchClient:
         try:
             parsed = urllib.parse.urlparse(url)
             return parsed.netloc.replace("www.", "")
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to parse domain from URL %r: %s", url, exc)
             return url
 
     def _fetch_public_with_optional_proxy(

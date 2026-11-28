@@ -18,6 +18,7 @@ edges.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -25,6 +26,8 @@ from typing import Any, Protocol
 from app.project.symbols import SOURCE_SUFFIXES, RepoIndex
 
 from ..core.process_env import child_process_environment
+
+logger = logging.getLogger(__name__)
 
 MAX_EDGES_PER_PROVIDER = 4000
 
@@ -128,6 +131,7 @@ def _tree_sitter_available() -> tuple[bool, str]:
     try:
         _load_tree_sitter()
     except Exception as exc:  # pragma: no cover - depends on install extras
+        logger.debug("tree-sitter availability probe failed: %s", exc)
         return False, f"tree-sitter grammar not installed ({exc.__class__.__name__})"
     return True, ""
 
@@ -342,7 +346,8 @@ class _LspSession:
         finally:
             try:
                 self._proc.wait(timeout=5)
-            except Exception:
+            except Exception as exc:
+                logger.debug("LSP process wait timed out or failed, killing process: %s", exc)
                 self._proc.kill()
 
 
@@ -363,6 +368,7 @@ class LspPythonProvider:
             if importlib.util.find_spec("pylsp") is None:
                 return False, "python-lsp-server is not installed"
         except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("python-lsp-server probe failed: %s", exc)
             return False, f"python-lsp-server probe failed ({exc.__class__.__name__})"
         return True, ""
 

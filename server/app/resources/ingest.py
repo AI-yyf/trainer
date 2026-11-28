@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from html import unescape
@@ -7,6 +8,8 @@ from importlib import import_module
 from typing import Any
 
 from app.network_fetch import ControlledFetchError, ControlledFetchResponse, fetch_url
+
+logger = logging.getLogger(__name__)
 
 _TRAFILATURA_UNSET = object()
 _trafilatura_module: Any = _TRAFILATURA_UNSET
@@ -96,7 +99,8 @@ def extract_from_url(url: str, *, network_enabled: bool = False) -> ExtractedCon
                 )
                 or ""
             ).strip()
-        except Exception:
+        except Exception as exc:
+            logger.debug("Trafilatura markdown extraction failed: %s", exc)
             markdown_text = ""
 
     if trafilatura is None:

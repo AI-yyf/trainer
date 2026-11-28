@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import shlex
@@ -51,6 +52,8 @@ from .constants import (
     _contains_pattern,
     _SkillManifestContract,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class PatchAndSkillRunMixin:
@@ -314,7 +317,8 @@ class PatchAndSkillRunMixin:
                         if self._path_exists(target):
                             self._ensure_directory(source.parent)
                             target.rename(source)
-                except Exception:
+                except Exception as exc:
+                    logger.warning("Rollback rename failed in sandbox patch: %s", exc)
                     continue
 
             if self._event_ledger is not None:

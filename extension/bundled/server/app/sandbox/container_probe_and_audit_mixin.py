@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import logging
 import os
 import platform
 import re
@@ -82,6 +83,8 @@ from .constants import (
     _ArchiveEntryMetadata,
     _TruncatedOutput,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ContainerProbeAndAuditMixin:
@@ -1541,7 +1544,8 @@ class ContainerProbeAndAuditMixin:
     def _extract_pdf_text(self, path: Path) -> str:
         try:
             import fitz  # type: ignore
-        except Exception:
+        except Exception as exc:
+            logger.debug("PyMuPDF unavailable for PDF preview of %s: %s", path.name, exc)
             return f"PDF preview requires PyMuPDF. File: {path.name}"
         with fitz.open(path) as document:  # type: ignore[attr-defined]
             pages = [str(page.get_text()) for page in document]

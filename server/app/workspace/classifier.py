@@ -8,6 +8,7 @@ refined by a structured prompt.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import stat
 from dataclasses import dataclass, replace
@@ -26,6 +27,8 @@ from .subject_scan import detect_workspace_subject_family
 
 if TYPE_CHECKING:
     from .authority import WorkspaceAuthority
+
+logger = logging.getLogger(__name__)
 
 
 ProjectDiscoveryDecision = Literal["adopt", "browse", "ignore"]
@@ -1672,7 +1675,8 @@ async def classify_with_llm(
             max_tokens=800,
         )
         return _parse_llm_response(base, response)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Workspace LLM classification refinement failed, using heuristic base: %s", exc)
         return base
 
 

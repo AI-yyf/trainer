@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -10,6 +11,8 @@ from typing import Any, Callable, Literal, cast
 from uuid import uuid4
 
 from ..core.models import utc_now_iso
+
+logger = logging.getLogger(__name__)
 
 ProjectAdoptionJobStatus = Literal[
     "queued",
@@ -351,6 +354,7 @@ class ProjectAdoptionIndexService:
             try:
                 result = finalize(inventory)
             except Exception as exc:  # noqa: BLE001
+                logger.warning("Project adoption finalization failed: %s", exc)
                 self._update(
                     record,
                     status="retry_required",

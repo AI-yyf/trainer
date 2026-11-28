@@ -87,6 +87,7 @@ async def _waiter_training_card_stream(
     except asyncio.CancelledError:
         raise
     except Exception as exc:
+        logger.warning("Training route failed (request_id=%s): %s", request_id, exc)
         failure_payload = core.domain.attach_operation_reliability(
             {},
             phase="acked",
@@ -246,11 +247,13 @@ async def _run_training_card_owner_stream(
         return
     except Exception as exc:
         error = exc.detail if isinstance(exc, HTTPException) else exc
+        redacted_error = redact_provider_error(
+            error,
+            api_key=getattr(training_provider_service, "_api_key", None),
+        )
+        logger.warning("Training card stream failed (stream_id=%s): %s", stream_id, redacted_error)
         async for abort_frame in _abort_fail_closed(
-            error_detail=redact_provider_error(
-                error,
-                api_key=getattr(training_provider_service, "_api_key", None),
-            ),
+            error_detail=redacted_error,
         ):
             yield abort_frame
     finally:

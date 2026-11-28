@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from typing import Any
 
@@ -10,6 +11,8 @@ from fastapi.responses import StreamingResponse
 from ...llm.provider_service import ProviderService, redact_provider_error
 from ...research.models import AgentRole, ArtifactKind, ScheduleCadence, ThreadDepth
 from ...research.service import ResearchOrchestratorService
+
+logger = logging.getLogger(__name__)
 
 
 def build_research_router(
@@ -247,6 +250,7 @@ def build_research_router(
 
             except Exception as exc:
                 safe_error = redact_provider_error(exc, fallback="Research provider request failed")
+                logger.warning("Research SSE stream failed: %s", safe_error)
                 yield f"event: error\ndata: {json.dumps({'error': safe_error})}\n\n"
 
         return StreamingResponse(generate(), media_type="text/event-stream")

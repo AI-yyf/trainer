@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
@@ -69,6 +70,8 @@ from ._base import RouterDomainBase
 from .constants import (
     _STREAM_STATUS_PHASES,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class StreamAndLocksDomainMixin(RouterDomainBase):
@@ -264,7 +267,8 @@ class StreamAndLocksDomainMixin(RouterDomainBase):
                 )
                 if any(hint in msg_lower for hint in code_anchor_hints):
                     return "full"
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to infer context mode, defaulting to full: %s", exc)
             return "full"
         return "minimal"
 
@@ -799,8 +803,10 @@ class StreamAndLocksDomainMixin(RouterDomainBase):
                 return
             raise
         except Exception as exc:
+            redacted = redact_provider_error(exc)
+            logger.warning("Stream aborted fail-closed due to error: %s", redacted)
             async for _abort_frame in _abort_fail_closed(
-                error_detail=redact_provider_error(exc),
+                error_detail=redacted,
             ):
                 yield _abort_frame
         finally:

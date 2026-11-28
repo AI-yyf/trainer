@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from hashlib import sha256
 from pathlib import Path
@@ -10,6 +11,8 @@ from app.resources.models import IndexStatus, ResourceChunk, ResourceKind, Resou
 from app.resources.ocr import ocr_image_bytes
 
 from .models import IngestionRequest, IngestionResult, IngestionSummary, VisionPayload
+
+logger = logging.getLogger(__name__)
 
 _FITZ_UNSET = object()
 _fitz_module: object = _FITZ_UNSET
@@ -23,7 +26,8 @@ def _fitz() -> object | None:
             import fitz  # type: ignore
 
             _fitz_module = fitz
-        except Exception:  # pragma: no cover - optional dependency
+        except Exception as exc:  # pragma: no cover - optional dependency
+            logger.debug("Optional PyMuPDF dependency unavailable: %s", exc)
             _fitz_module = None
     return _fitz_module
 
@@ -397,7 +401,8 @@ def _extract_epub_text(request: IngestionRequest) -> tuple[str, list[str], dict[
                                     "char_length": len(text_val),
                                 }
                             )
-                except Exception:
+                except Exception as exc:
+                    logger.debug("EPUB XHTML XML parse failed, falling back to regex extraction: %s", exc)
                     # Fallback regex paragraph extraction if XHTML isn't strict XML
                     for block in re.findall(r"<(?:p|h[1-6]|blockquote)[^>]*>(.*?)</(?:p|h[1-6]|blockquote)>", raw_html, flags=re.I | re.S):
                         cleaned = re.sub(r"<[^>]+>", " ", block)
@@ -424,6 +429,7 @@ def _extract_epub_text(request: IngestionRequest) -> tuple[str, list[str], dict[
                 provenance["content_language"] = content_language
             return "\n\n".join(extracted_paragraphs).strip(), warnings, provenance
     except Exception as exc:
+        logger.warning("EPUB parsing failed: %s", exc)
         warnings.append(f"EPUB parsing failed: {exc}")
         return "", warnings, {}
 

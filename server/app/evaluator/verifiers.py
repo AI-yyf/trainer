@@ -19,6 +19,7 @@ sources join it only in P2 (#23).
 from __future__ import annotations
 
 import ast
+import logging
 import shutil
 import sys
 from collections.abc import Mapping
@@ -28,6 +29,8 @@ from typing import Any, Protocol
 
 from .hooks import Hook, hooks_from_card_config, run_hooks
 from .models import CheckCommand, CheckResult, CheckStatus, EvaluationRequest
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_SUBJECT_FAMILY = "code"
 
@@ -402,7 +405,8 @@ def verify_submission_with_pack(
     for builder in pack.deterministic_hooks:
         try:
             hooks.extend(builder(config))
-        except Exception:  # noqa: BLE001 - a bad card declaration yields no hooks, never a pass
+        except Exception as exc:  # noqa: BLE001 - a bad card declaration yields no hooks, never a pass
+            logger.warning("Verifier hook builder failed for card config: %s", exc)
             continue
     hook_results = (*extra_deterministic, *run_hooks(tuple(hooks), submission, locale=locale))
     resolved_reviewer: RubricReviewer = reviewer if reviewer is not None else LocalRubricReviewer()

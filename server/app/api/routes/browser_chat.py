@@ -512,6 +512,7 @@ def build_browser_chat_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIR
             try:
                 await request.app(scope, receive, send)
             except Exception as exc:  # noqa: BLE001
+                logger.warning("Browser chat upstream task failed: %s", exc)
                 await queue.put(exc)
             finally:
                 await queue.put(None)

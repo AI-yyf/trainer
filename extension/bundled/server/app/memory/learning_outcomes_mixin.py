@@ -165,7 +165,8 @@ class LearningOutcomesMixin:
                         summary=verified_summary,
                         verification_source=verification_source,
                     )
-                except Exception:
+                except Exception as exc:
+                    logger.warning("Failed to record card progress for %s, falling back to handoff progress: %s", resolved_workspace_id, exc)
                     return self._persist_training_handoff_progress(
                         workspace_id=resolved_workspace_id,
                         structured=structured,
@@ -190,7 +191,8 @@ class LearningOutcomesMixin:
                 summary=verified_summary,
                 verification_source=verification_source,
             )
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to record outcome progress for %s, falling back to handoff progress: %s", resolved_workspace_id, exc)
             return self._persist_training_handoff_progress(
                 workspace_id=resolved_workspace_id,
                 structured=structured,

@@ -205,7 +205,8 @@ class LibraryService:
             return None
         try:
             inline_root = Path(self._inline_resource_root_resolver(workspace_id)).expanduser()
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to resolve inline resource root for %s: %s", workspace_id, exc)
             return None
         return (inline_root / "groups").resolve(strict=False)
 

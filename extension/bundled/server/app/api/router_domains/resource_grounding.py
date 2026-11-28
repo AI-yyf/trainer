@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
@@ -53,6 +54,8 @@ from ._base import RouterDomainBase
 from .constants import (
     GUIDED_SEQUENCE_SCENARIOS,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ResourceGroundingDomainMixin(RouterDomainBase):
@@ -756,7 +759,8 @@ class ResourceGroundingDomainMixin(RouterDomainBase):
         local_source_path = None
         try:
             local_source_path = self.runtime.resource_service._local_source_path(resource.source)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to resolve local source path for resource: %s", exc)
             local_source_path = None
         if local_source_path is None or not local_source_path.exists() or not local_source_path.is_file():
             return resource, ""
@@ -891,7 +895,8 @@ class ResourceGroundingDomainMixin(RouterDomainBase):
                     top_k=24 if analysis else max(limit * 2, limit + 2),
                     project_scope=workspace_id,
                 )
-            except Exception:
+            except Exception as exc:
+                logger.debug("Auto resource search failed for query %r: %s", candidate, exc)
                 continue
             requested_resources, resource_fragments = self.collect_auto_resource_search_hits(
                 getattr(search_response, "results", None),

@@ -342,6 +342,7 @@ class CoachingReplyMixin:
             return self._context_budget_status_reply(response_language)
         except Exception as exc:
             category, retryable, status_code, provider_reachable, model_supported = self._classify_error(exc)
+            logger.warning("Coaching reply failed (category=%s, status=%s)", category, status_code)
             provider_config = self._config or ProviderConfig(
                 name="unspecified-provider",
                 baseUrl="",
@@ -2002,6 +2003,7 @@ async def _provider_service_coaching_reply_stream(
         yield self._context_budget_status_reply(response_language)
     except Exception as exc:
         category, retryable, status_code, provider_reachable, model_supported = self._classify_error(exc)
+        logger.warning("Coaching stream failed (category=%s, status=%s)", category, status_code)
         provider_config = self._config or ProviderConfig(
             name="unspecified-provider",
             baseUrl="",

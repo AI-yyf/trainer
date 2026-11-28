@@ -1008,6 +1008,7 @@ class CardGenerationService:
                 last_stream_error = exc
                 break
             except Exception as exc:
+                logger.warning("Training card generation stream attempt %d failed (%s)", stream_attempt, exc.__class__.__name__)
                 last_stream_error = exc
                 if stream_attempt == 0 and not raw_parts:
                     await asyncio.sleep(1.5)

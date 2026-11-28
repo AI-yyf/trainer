@@ -7,6 +7,7 @@ instead of hiding 45 names inside a 25k-line function.
 
 from __future__ import annotations
 
+import logging
 from uuid import uuid4
 
 from pydantic import ValidationError
@@ -63,6 +64,8 @@ from ..router_support import (
 )
 from .artifacts_and_state import _scrub_bogus_smalltalk_steps
 from .types_and_deps import CoachSupportDeps
+
+logger = logging.getLogger(__name__)
 
 
 def hydrate_snapshot(deps: CoachSupportDeps,
@@ -1385,7 +1388,8 @@ def persist_turn_reflection(deps: CoachSupportDeps,
     elif isinstance(coach_defaults, dict):
         try:
             resolved_defaults = CoachDefaults.model_validate(coach_defaults)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Ignoring invalid coach_defaults payload: %s", exc)
             resolved_defaults = None
 
     if recovery_without_learning_evidence:

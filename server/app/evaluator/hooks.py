@@ -14,12 +14,15 @@ touch the network, and their PASSED/FAILED verdicts count toward the
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
 from .models import CheckResult, CheckStatus
+
+logger = logging.getLogger(__name__)
 
 _CJK_RANGES = (
     (0x4E00, 0x9FFF),   # CJK unified ideographs
@@ -276,6 +279,7 @@ def run_hooks(
             except TypeError:
                 results.append(hook.run(submission))  # type: ignore[call-arg]
         except Exception as exc:  # noqa: BLE001 - a broken hook must not crash evaluation
+            logger.warning("Verification hook %r raised an error: %s", hook.name, exc)
             results.append(
                 CheckResult(
                     name=hook.name,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import posixpath
 import re
@@ -65,6 +66,8 @@ from ..router_support import (
 )
 from ._base import RouterDomainBase
 from .training_cards_activation_mixin import TrainingCardsActivationMixin
+
+logger = logging.getLogger(__name__)
 
 
 class TrainingCardsDomainMixin(RouterDomainBase, TrainingCardsActivationMixin):
@@ -585,7 +588,8 @@ class TrainingCardsDomainMixin(RouterDomainBase, TrainingCardsActivationMixin):
         if isinstance(saved, dict):
             try:
                 return CoachDefaults.model_validate(saved)
-            except Exception:
+            except Exception as exc:
+                logger.debug("Ignoring invalid saved CoachDefaults: %s", exc)
                 return None
         return None
 

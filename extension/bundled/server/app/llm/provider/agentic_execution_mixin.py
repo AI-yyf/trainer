@@ -406,6 +406,7 @@ class AgenticExecutionMixin:
                 attachment_delivery=attachment_delivery,
             )
         except Exception as exc:
+            logger.warning("Agentic reply failed (%s); falling back to plain LLM reply", exc.__class__.__name__)
             fallback = await self._llm_reply(
                 profile,
                 message,
@@ -1371,6 +1372,7 @@ class AgenticExecutionMixin:
                 **attachment_delivery,
             }
         except Exception as exc:
+            logger.warning("Agentic stream failed (%s); falling back to error scaffold", exc.__class__.__name__)
             scaffold = self._error_reply_with_scaffold(
                 exc=exc,
                 profile=profile,

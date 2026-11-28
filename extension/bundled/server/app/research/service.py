@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime
 from hashlib import sha1
@@ -25,6 +26,8 @@ from .web_search import SearchResultEnricher, WebSearchClient
 
 if TYPE_CHECKING:
     from ..db.research_repository import ResearchRepository
+
+logger = logging.getLogger(__name__)
 
 
 _REFERENCE_STOPWORDS = {
@@ -577,7 +580,8 @@ class ResearchOrchestratorService:
                 findings=findings,
                 language="zh-CN",
             )
-        except Exception:
+        except Exception as exc:
+            logger.debug("Research role briefing LLM call failed, using template fallback: %s", exc)
             brief = None
         if brief:
             return f"[{role.value.upper()}] {brief}", "llm"
@@ -729,6 +733,7 @@ class ResearchOrchestratorService:
                 "results": [],
             }
         except Exception as exc:
+            logger.warning("Research web search failed for query %r: %s", query, exc)
             return {"error": str(exc), "query": query, "results": []}
 
         if not results:

@@ -859,6 +859,7 @@ class ResourceService(
                 )
                 converted += 1
             except Exception as exc:  # noqa: BLE001 - report per-resource, never abort the batch
+                logger.warning("Batch resource conversion failed for %s: %s", resource_id, exc)
                 failures.append({"resource_id": resource_id, "error": str(exc)})
         summary["converted"] = converted
 
@@ -1479,7 +1480,8 @@ class ResourceService(
                 continue
             try:
                 current = self.version_store.current_version(workspace_id, hit.resource_id) or {}
-            except Exception:
+            except Exception as exc:
+                logger.debug("Failed to fetch current version for resource %s: %s", hit.resource_id, exc)
                 current = {}
             current_version = str(current.get("version_id") or "").strip()
             if current_version and current_version != indexed_version:

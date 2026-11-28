@@ -12,6 +12,7 @@ class.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -61,6 +62,8 @@ from .workspace_recovery import (
 
 if TYPE_CHECKING:
     from .review_scheduler import ReviewScheduler
+
+logger = logging.getLogger(__name__)
 
 
 def _localized_memory_text(en: str, zh: str, context: str = "") -> str:
@@ -1709,7 +1712,8 @@ class CoachingAdaptationMixin:
             return None
         try:
             snapshot = WorkspaceUnderstandingSnapshot.model_validate(candidate)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Ignoring invalid WorkspaceUnderstandingSnapshot candidate: %s", exc)
             return None
         if not (
             snapshot.repo_summary
