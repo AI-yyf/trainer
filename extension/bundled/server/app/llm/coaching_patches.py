@@ -32,6 +32,8 @@ from .coaching_replies import (
     _structured_view_has_lane_signal,
 )
 from .coaching_scaffold import (
+    _SENTENCE_END,
+    _learner_file_name,
     _practice_verification_arguments,
     _scenario_step_text,
     _surface_context_text,
@@ -186,6 +188,17 @@ def _guided_domain_empty_reply_override(
     )
 
 
+def _join_sentences(first: str, second: str, *, chinese: bool) -> str:
+    """Two sentences of one paragraph are separated by a sentence end, never by a bare space:
+    "先从 `app.py` 开始 我会把解释压短一点" was read under a failure banner."""
+    first, second = first.strip(), second.strip()
+    if not first or not second:
+        return f"{first} {second}".strip()
+    if first.endswith(_SENTENCE_END):
+        return f"{first}{second}" if chinese else f"{first} {second}"
+    return f"{first}。{second}" if chinese else f"{first}. {second}"
+
+
 def _compose_scaffold_paragraphs(
     *,
     scenario: str,
@@ -202,7 +215,7 @@ def _compose_scaffold_paragraphs(
         if scenario in {"review", "task", "next_task", "engineering_challenge"}:
             return [
                 anchor,
-                f"{diagnosis} {next_step}".strip(),
+                _join_sentences(diagnosis, next_step, chinese=chinese),
                 teaching_note,
                 close,
             ]
@@ -210,13 +223,13 @@ def _compose_scaffold_paragraphs(
             return [
                 anchor,
                 diagnosis,
-                f"{next_step} {teaching_note}".strip(),
+                _join_sentences(next_step, teaching_note, chinese=chinese),
                 close,
             ]
         if learner_signal == "blocked" or mode == "direct":
             return [
                 anchor,
-                f"{diagnosis} {next_step}".strip(),
+                _join_sentences(diagnosis, next_step, chinese=chinese),
                 close,
             ]
         return [
@@ -230,7 +243,7 @@ def _compose_scaffold_paragraphs(
     if scenario in {"review", "task", "next_task", "engineering_challenge"}:
         return [
             anchor,
-            f"{diagnosis} {next_step}".strip(),
+            _join_sentences(diagnosis, next_step, chinese=chinese),
             teaching_note,
             close,
         ]
@@ -238,13 +251,13 @@ def _compose_scaffold_paragraphs(
         return [
             anchor,
             diagnosis,
-            f"{next_step} {teaching_note}".strip(),
+            _join_sentences(next_step, teaching_note, chinese=chinese),
             close,
         ]
     if learner_signal == "blocked" or mode == "direct":
         return [
             anchor,
-            f"{diagnosis} {next_step}".strip(),
+            _join_sentences(diagnosis, next_step, chinese=chinese),
             close,
         ]
     return [
@@ -629,7 +642,7 @@ def _anchor_step_to_workspace(
     project_entry_points: list[str],
     chinese: bool,
 ) -> str:
-    anchor = file_path or (project_entry_points[0] if project_entry_points else "")
+    anchor = _learner_file_name(file_path) or (project_entry_points[0] if project_entry_points else "")
     if not anchor or _reply_mentions_excerpt(step, anchor):
         return step
     if chinese:

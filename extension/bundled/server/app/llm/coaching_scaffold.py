@@ -7,6 +7,7 @@ to verify practice attempts.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .coaching_recovery import _trim_sentence
@@ -101,8 +102,29 @@ def _surface_context_text(text: str, *, chinese: bool) -> str | None:
 
 def _looks_english_heavy(text: str) -> bool:
     alpha_count = sum(1 for char in text if char.isalpha() and char.isascii())
-    cjk_count = sum(1 for char in text if "\u4e00" <= char <= "\u9fff")
-    return alpha_count > 8 and cjk_count == 0
+    if alpha_count <= 8:
+        return False
+    if not any("\u4e00" <= char <= "\u9fff" for char in text):
+        return True
+    # An English prompt that carries a Chinese anchor is still an English prompt — "Point at one
+    # line or branch in …/app.py, explain how 'Anchor 当前聚焦：…' shows up there" reached a Chinese
+    # learner under a gate that refused only text with no Chinese at all. A Chinese step carries
+    # identifiers; an English sentence shows in its short function words.
+    words = re.findall(r"[A-Za-z]+", text)
+    return sum(word.lower() in _ENGLISH_FUNCTION_WORDS for word in words) >= 3
+
+
+_ENGLISH_FUNCTION_WORDS = frozenset(
+    (
+        "a an the and or but if in on at to of for with from by is are be was were it this that then "
+        "one how what when your you we use keep before after not do can could would should into out "
+        "up down over under about"
+    ).split()
+)
+
+# The remembered focus is a labelled memory sentence ("当前聚焦：…", "Current coaching focus: …").
+_FOCUS_LABEL_PATTERN = re.compile(r"^(?:当前聚焦点|当前聚焦|current coaching focus)\s*[:：]\s*", re.IGNORECASE)
+_SENTENCE_END = ("。", ".", "!", "！", "?", "？")
 
 
 def _scaffold_anchor(
@@ -115,11 +137,12 @@ def _scaffold_anchor(
 ) -> str:
     visible_focus = _surface_context_text(current_focus, chinese=chinese)
     if visible_focus:
-        return (
-            f"我们先沿着这条线继续：{visible_focus}。"
-            if chinese
-            else f"I will keep working along this live thread: {visible_focus}."
-        )
+        visible_focus = _FOCUS_LABEL_PATTERN.sub("", visible_focus)
+        if chinese:
+            closing = "" if visible_focus.endswith(_SENTENCE_END) else "。"
+            return f"我们先沿着这条线继续：{visible_focus}{closing}"
+        closing = "" if visible_focus.endswith(_SENTENCE_END) else "."
+        return f"I will keep working along this live thread: {visible_focus}{closing}"
 
     if scenario == "remote_workspace":
         base = "我们先把这一轮留在 VS Code remote 这条线上。" if chinese else (
@@ -142,6 +165,7 @@ def _scaffold_anchor(
             "I will anchor this turn in the current principle and code boundary first."
         )
     else:
+        file_path = _learner_file_name(file_path)
         base = (
             f"我们先回到 `{file_path}` 这一步。"
             if chinese and file_path
@@ -329,19 +353,23 @@ def _scaffold_teaching_note(
     chinese: bool,
 ) -> str:
     if recent_wins:
-        recent_win = _surface_context_text(recent_wins[0], chinese=chinese) or recent_wins[0]
-        return (
-            f"你前面已经把这条线的一部分走通了：{recent_win}。这一轮继续沿着可验证的节奏走。"
-            if chinese
-            else f"You already proved part of this lane earlier: {recent_win}. I want to keep the same verifiable rhythm."
-        )
+        # A win remembered in English is not shown to a Chinese learner: the gate hides it, and the
+        # note falls through to the next thing that can be said in the learner's language.
+        recent_win = _surface_context_text(recent_wins[0], chinese=chinese) or ("" if chinese else recent_wins[0])
+        if recent_win:
+            return (
+                f"你前面已经把这条线的一部分走通了：{recent_win}。这一轮继续沿着可验证的节奏走。"
+                if chinese
+                else f"You already proved part of this lane earlier: {recent_win}. I want to keep the same verifiable rhythm."
+            )
     if weak_spots:
-        weak_spot = _surface_context_text(weak_spots[0], chinese=chinese) or weak_spots[0]
-        return (
-            f"我会继续盯住 {weak_spot} 这个易错点，不让它在这一轮重新扩散。"
-            if chinese
-            else f"I will keep watching the recurring weak spot around {weak_spot} so it does not spread again on this turn."
-        )
+        weak_spot = _surface_context_text(weak_spots[0], chinese=chinese) or ("" if chinese else weak_spots[0])
+        if weak_spot:
+            return (
+                f"我会继续盯住 {weak_spot} 这个易错点，不让它在这一轮重新扩散。"
+                if chinese
+                else f"I will keep watching the recurring weak spot around {weak_spot} so it does not spread again on this turn."
+            )
     if due_reviews:
         reason = _format_due_review_item(due_reviews[0])
         return (
@@ -388,9 +416,19 @@ def _scaffold_teaching_note(
     )
 
 
-def _file_suffix(file_path: str | None, chinese: bool = False) -> str:
+def _learner_file_name(file_path: str | None) -> str | None:
+    """The file as the learner names it. The local scaffold quoted the absolute path the host sends
+    ("先从 `/private/var/folders/…/app.py` 开始"), read under a failure banner."""
     if not file_path:
+        return None
+    name = file_path.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1].strip()
+    return name or None
+
+
+def _file_suffix(file_path: str | None, chinese: bool = False) -> str:
+    name = _learner_file_name(file_path)
+    if not name:
         return ""
     if chinese:
-        return f"，先从 `{file_path}` 开始"
-    return f" in `{file_path}`"
+        return f"，先从 `{name}` 开始"
+    return f" in `{name}`"

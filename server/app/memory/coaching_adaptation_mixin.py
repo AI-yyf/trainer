@@ -747,9 +747,9 @@ class CoachingAdaptationMixin:
                         f"Current coaching focus: keep '{visible_thread_focus}' parked until the provider path preserves the original sentence. Next step: {thread_next_step}"
                         if thread_next_step
                         else f"Current coaching focus: keep '{visible_thread_focus}' parked until the provider path preserves the original sentence.",
-                        f"当前聚焦：先把「{visible_thread_focus}」这条主线稳住，等 provider 链路能完整保留原句后再继续。下一步：{thread_next_step}"
+                        f"当前聚焦：先把「{visible_thread_focus}」这条主线稳住，等 provider 链路恢复后再继续。下一步：{thread_next_step}"
                         if thread_next_step
-                        else f"当前聚焦：先把「{visible_thread_focus}」这条主线稳住，等 provider 链路能完整保留原句后再继续。",
+                        else f"当前聚焦：先把「{visible_thread_focus}」这条主线稳住，等 provider 链路恢复后再继续。",
                         language_context or visible_thread_focus or thread_next_step or thread_blocker,
                     )
                 focus_line = _localized_memory_text(

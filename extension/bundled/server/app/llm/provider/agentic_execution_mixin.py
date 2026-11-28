@@ -174,12 +174,15 @@ class AgenticExecutionMixin:
             return None
         summary = self.provider_failure_summary(category, response_language)
         next_step = self.provider_failure_next_step(category, response_language)
-        content = self.provider_failure_reply(category, summary, response_language)
+        # The binding keeps only the category of the failure, never the provider's message, so the
+        # reply carries no detail line. Passing the summary as the detail repeated it, and storing
+        # the composed reply as the failure's detail let the route wrap that reply around itself.
+        content = self.provider_failure_reply(category, None, response_language)
         # Restore only classified, safe facts in the request owner's task.
         # Never let the local teaching scaffold conceal an upstream failure.
         if category in {"network", "timeout", "upstream_unavailable", "unknown"}:
             self.reset_transport_client()
-        self._last_reply_failure.set({**failure, "detail": content, "error": summary})
+        self._last_reply_failure.set({**failure, "detail": "", "error": summary})
         return {
             "content": content,
             "summary": summary,

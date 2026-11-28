@@ -60,6 +60,7 @@ from ..coaching_reply_drafts import (
     _strip_generic_lane_prompt_artifacts,
 )
 from ..coaching_scaffold import (
+    _learner_file_name,
     _scaffold_anchor,
     _scaffold_diagnosis,
     _scaffold_teaching_note,
@@ -1256,7 +1257,7 @@ class CoachingReplyMixin:
             if scaffold:
                 return scaffold
 
-        file_path = current_file.get("path") if current_file else None
+        file_path = _learner_file_name(str(current_file.get("path") or "")) if current_file else None
         if file_path:
             return _localized_text(
                 f"I am still with you. Re-anchor on `{file_path}`, restate the target behavior, and tell me the one decision that feels most uncertain so we can reduce it to the next smallest verifiable step.",
