@@ -15,6 +15,10 @@ from ..core.models import (
     TeachingKnowledgeAsset,
     TheoryDrillHistoryEntry,
 )
+from ..core.workspace_scope_runtime import (
+    PLAN_RUNTIME_KEY,
+    stamp_workspace_scope,
+)
 from ..pedagogy.evidence_controls import (
     analyze_learning_evidence,
     resolve_pedagogy_controls,
@@ -41,10 +45,6 @@ from .models import (
 from .transfer_skills import (
     normalize_transfer_skill_state_record,
     resolve_skill_scene_key,
-)
-from .workspace_recovery import (
-    PLAN_RUNTIME_KEY,
-    stamp_workspace_scope,
 )
 
 logger = logging.getLogger(__name__)

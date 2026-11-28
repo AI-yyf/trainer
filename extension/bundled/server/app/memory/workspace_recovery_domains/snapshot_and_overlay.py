@@ -15,6 +15,9 @@ from ...core.workspace_live_identity import (
 from ...core.workspace_live_identity import (
     live_training_why_this_card as live_training_why_this_card,
 )
+from ...core.workspace_scope_runtime import (
+    live_training_open_copy as live_training_open_copy,
+)
 from .plan_persist_chrome import (
     PLAN_RUNTIME_KEY,
     _formal_plan_candidate_focus,
@@ -778,81 +781,6 @@ def live_task_converted_copy(
 
 
 
-def live_training_open_copy(
-    *,
-    plan: Any | None = None,
-    task: Any | None = None,
-    runtime: dict[str, Any] | None = None,
-    existing: dict[str, Any] | None = None,
-    task_title: str = "",
-    card_title: str = "",
-    next_step: str = "",
-    primer_required: bool = False,
-) -> dict[str, str]:
-    """Open Training chrome uses recovered current_step, not leftover formal card titles."""
-
-    title = live_training_card_title(
-        plan=plan,
-        task=task,
-        runtime=runtime,
-        existing=existing,
-        task_title=task_title,
-        card_title=card_title,
-    )
-    leftover = leftover_formal_training_labels(
-        plan=plan,
-        task_title=_text(task_title) or _text(getattr(task, "title", "") if task is not None else ""),
-        live_plan=False,
-        live_task=False,
-    )
-    live_plan = formal_plan_is_live_runtime_identity(
-        plan=plan,
-        runtime=runtime if isinstance(runtime, dict) else {},
-        existing=existing if isinstance(existing, dict) else {},
-        current_step=_text((runtime or {}).get("current_step") if isinstance(runtime, dict) else "")
-        or _text((existing or {}).get("current_step") if isinstance(existing, dict) else ""),
-    )
-    leftover_not_live = bool(runtime or existing) and (not title or not live_plan)
-    step = _text(next_step)
-    if leftover_not_live and leftover and step and (
-        step in leftover or any(label and label in step for label in leftover)
-    ):
-        step = title
-    if title:
-        return {
-            "title": title,
-            "en_current": f"- Current card: **{title}**",
-            "zh_current": f"- 当前卡片：**{title}**",
-            "en_summary": f"{title} is now the active learn-first card.",
-            "zh_summary": f"{title} 已经是当前训练主线。",
-            "en_complete": (
-                f"Open Training and finish the primer for {title}."
-                if primer_required
-                else (
-                    f"Open Training and start with: {step}"
-                    if step
-                    else f"Open Training and complete {title}."
-                )
-            ),
-            "zh_complete": (
-                f"打开 Training，先完成 {title} 的 primer。"
-                if primer_required
-                else (
-                    f"打开 Training，先做这一步：{step}"
-                    if step
-                    else f"打开 Training，完成 {title}。"
-                )
-            ),
-        }
-    return {
-        "title": "",
-        "en_current": "- Current card: keep one single current card.",
-        "zh_current": "- 当前卡片：只保留一张当前主卡。",
-        "en_summary": "The current training card is now the learn-first line.",
-        "zh_summary": "当前训练卡已经是训练主线。",
-        "en_complete": "Open Training and complete the current card.",
-        "zh_complete": "打开 Training，完成当前卡片。",
-    }
 
 
 def live_training_persist_chrome(

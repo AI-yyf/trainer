@@ -7,14 +7,14 @@ from enum import Enum
 from typing import Literal
 
 from ..core.models import LearningPlan, ReviewQueueItem
-from .models import MasteryRecord, ProgressRecord, ReflectionRecord, WeaknessRecord, utc_now
-from .models import MemorySnapshot as LaneMemorySnapshot
-from .review_intervention import curate_review_items, derive_review_budget
-from .workspace_recovery import (
+from ..core.workspace_scope_runtime import (
     PLAN_RUNTIME_KEY,
     live_coach_stage_label,
     select_plan_runtime_for_scope,
 )
+from .models import MasteryRecord, ProgressRecord, ReflectionRecord, WeaknessRecord, utc_now
+from .models import MemorySnapshot as LaneMemorySnapshot
+from .review_intervention import curate_review_items, derive_review_budget
 
 ReviewQueueSource = Literal["weakness", "mastery", "reflection", "plan"]
 ReviewQueueSeverity = Literal["low", "medium", "high"]

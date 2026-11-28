@@ -22,15 +22,15 @@ from ...core.models import (
     UserProfile,
     WorkbenchSnapshot,
 )
+from ...core.workspace_live_identity import live_training_why_this_card
+from ...core.workspace_scope_runtime import (
+    apply_live_training_mint_to_card,
+    live_training_open_copy,
+)
 from ...learner_state import learner_memory_snapshot
 from ...llm.prompts import infer_coaching_scenario as infer_message_coaching_scenario
 from ...llm.provider_service import (
     ProviderService,
-)
-from ...memory.workspace_recovery import (
-    apply_live_training_mint_to_card,
-    live_training_open_copy,
-    live_training_why_this_card,
 )
 from ...training.card_generator import (
     CardGenerationProviderFailure,

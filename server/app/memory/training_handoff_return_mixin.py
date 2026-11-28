@@ -14,6 +14,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable
 
 from ..core.models import EvidenceItem, TrainingCardCandidateSnapshot
+from ..core.workspace_live_identity import (
+    formal_plan_is_live_runtime_identity,
+)
+from ..core.workspace_live_identity import (
+    stale_formal_training_labels as leftover_formal_training_labels,
+)
 from ..training.handoff import (
     HandoffStatus,
     ProjectHandoff,
@@ -23,10 +29,6 @@ from ..training.handoff import (
 from ..training.plan_binding import binding_matches_plan
 from ..workspace.remote_identity import validate_remote_verification_artifact
 from .models import utc_now
-from .workspace_recovery import (
-    formal_plan_is_live_runtime_identity,
-    leftover_formal_training_labels,
-)
 
 if TYPE_CHECKING:
     from .service import StructuredMemoryService

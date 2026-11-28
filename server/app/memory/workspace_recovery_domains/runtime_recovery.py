@@ -9,6 +9,36 @@ from __future__ import annotations
 
 from typing import Any
 
+from ...core.workspace_scope_runtime import (
+    apply_live_training_mint_to_card as apply_live_training_mint_to_card,
+)
+from ...core.workspace_scope_runtime import (
+    evidence_bound_to_runtime_step as evidence_bound_to_runtime_step,
+)
+from ...core.workspace_scope_runtime import (
+    evidence_item_concepts as evidence_item_concepts,
+)
+from ...core.workspace_scope_runtime import (
+    evidence_item_workspace_id as evidence_item_workspace_id,
+)
+from ...core.workspace_scope_runtime import (
+    is_current_for_workspace as is_current_for_workspace,
+)
+from ...core.workspace_scope_runtime import (
+    scope_evidence_items_to_workspace as scope_evidence_items_to_workspace,
+)
+from ...core.workspace_scope_runtime import (
+    scope_evidence_queue_to_runtime_step as scope_evidence_queue_to_runtime_step,
+)
+from ...core.workspace_scope_runtime import (
+    select_plan_runtime_for_pressure as select_plan_runtime_for_pressure,
+)
+from ...core.workspace_scope_runtime import (
+    select_plan_runtime_for_scope as select_plan_runtime_for_scope,
+)
+from ...core.workspace_scope_runtime import (
+    stamp_produced_workspace_record as stamp_produced_workspace_record,
+)
 from .plan_persist_chrome import (
     PLAN_RUNTIME_KEY,
     STREAMING_PHASES,
@@ -62,51 +92,6 @@ def coach_focus_runtime_from_snapshot(snapshot: Any | None) -> dict[str, Any]:
     return {}
 
 
-def apply_live_training_mint_to_card(
-    card: Any,
-    *,
-    anchors: dict[str, str],
-    leftover_labels: set[str],
-    recovered_step: str = "",
-) -> Any:
-    """Keep minted card why/skill/title off leftover formal labels."""
-
-    leftover = {label for label in leftover_labels if _text(label)}
-    if card is None or not leftover:
-        return card
-    updates: dict[str, str] = {}
-    why = _text(getattr(card, "why_now", ""))
-    if why in leftover:
-        updates["why_now"] = _text(anchors.get("why_now"))
-    skill = _text(getattr(card, "target_skill", ""))
-    if skill in leftover:
-        updates["target_skill"] = _text(anchors.get("target_skill"))
-    focus = _text(getattr(card, "focus_area", ""))
-    if focus in leftover:
-        updates["focus_area"] = _text(anchors.get("focus_area"))
-    title = _text(getattr(card, "title", ""))
-    leftover_titles = tuple(leftover)
-    titled_from_leftover = title in leftover or any(
-        title
-        in {
-            f"Practice: {label}",
-            f"Flash: {label}",
-            f"练习：{label}",
-            f"闪记：{label}",
-        }
-        for label in leftover_titles
-    )
-    if titled_from_leftover:
-        replacement = _text(recovered_step) or _text(anchors.get("focus_area"))
-        updates["title"] = "" if replacement in leftover else replacement
-    if not updates:
-        return card
-    copier = getattr(card, "model_copy", None)
-    if callable(copier):
-        return copier(update=updates)
-    for key, value in updates.items():
-        setattr(card, key, value)
-    return card
 
 
 def _without_leftover_formal_identity(record: dict[str, Any], plan: Any | None) -> dict[str, Any]:
@@ -516,26 +501,8 @@ def _same_identity(left: Any, right: Any) -> bool:
     return bool(first) and first.casefold() == second.casefold()
 
 
-def stamp_produced_workspace_record(record: Any, workspace_id: str) -> Any:
-    """Stamp a produced plan/task with the workspace that created it. Does not invent one."""
-
-    if record is None:
-        return None
-    scope = _text(workspace_id)
-    if not scope:
-        return record
-    existing = _text(getattr(record, "workspace_id", "") or getattr(record, "workspaceId", ""))
-    if existing and existing != scope:
-        return record
-    if hasattr(record, "workspace_id"):
-        record.workspace_id = existing or scope
-    return record
 
 
-def is_current_for_workspace(record: dict[str, Any] | None, workspace_id: str) -> bool:
-    record_workspace_id = _text((record or {}).get("workspace_id"))
-    scope_workspace_id = _text(workspace_id)
-    return bool(record_workspace_id) and bool(scope_workspace_id) and record_workspace_id == scope_workspace_id
 
 
 def is_current_for_provider(
@@ -563,9 +530,6 @@ def is_current_for_provider(
     return True
 
 
-def select_plan_runtime_for_scope(value: Any, workspace_id: str) -> dict[str, Any] | None:
-    record = normalize_plan_runtime_recovery(value)
-    return record if record and is_current_for_workspace(record, workspace_id) else None
 
 
 def normalize_training_chrome(value: Any) -> dict[str, Any] | None:
@@ -656,22 +620,8 @@ def apply_training_chrome_scope(workspace: dict[str, Any] | None, workspace_id: 
     return payload
 
 
-def evidence_item_workspace_id(item: Any) -> str:
-    if item is None:
-        return ""
-    if isinstance(item, dict):
-        return _text(item.get("workspace_id") or item.get("workspaceId"))
-    return _text(getattr(item, "workspace_id", "") or getattr(item, "workspaceId", ""))
 
 
-def scope_evidence_items_to_workspace(items: list[Any], workspace_id: str) -> list[Any]:
-    """Pending/history items from another workspace are not live here."""
-
-    return [
-        item
-        for item in items
-        if is_current_for_workspace({"workspace_id": evidence_item_workspace_id(item)}, workspace_id)
-    ]
 
 
 def select_resources_for_scope(value: Any, workspace_id: str) -> list[Any]:
@@ -687,20 +637,6 @@ def select_resources_for_scope(value: Any, workspace_id: str) -> list[Any]:
     return scoped
 
 
-def select_plan_runtime_for_pressure(value: Any, workspace_id: str) -> dict[str, Any] | None:
-    """Scoped runtime usable as pressure only — never as a generated plan.
-
-    A plan_id-only or otherwise incomplete record is stale: it must not invent
-    urgency, a live plan, or a successful generate. Blocked reason or current
-    step is required before the record can shrink/hold the next move.
-    """
-
-    record = select_plan_runtime_for_scope(value, workspace_id)
-    if record is None:
-        return None
-    if not (_text(record.get("blocked_reason")) or _text(record.get("current_step"))):
-        return None
-    return record
 
 
 def overlay_plan_runtime_display_facts(
@@ -954,117 +890,10 @@ def overlay_plan_runtime_current_stage(
     return None
 
 
-def evidence_item_concepts(item: Any) -> list[str]:
-    raw = getattr(item, "concepts", None)
-    if raw is None and isinstance(item, dict):
-        raw = item.get("concepts")
-    return [_text(concept) for concept in (raw or []) if _text(concept)]
 
 
-def evidence_bound_to_runtime_step(item: Any, current_step: str) -> bool:
-    step = _text(current_step)
-    if not step:
-        return False
-    bound_step = _text(
-        getattr(item, "target_plan_step", None)
-        or (item.get("target_plan_step") if isinstance(item, dict) else "")
-    )
-    if bound_step:
-        return bound_step == step
-    if step in evidence_item_concepts(item):
-        return True
-    target = _text(
-        getattr(item, "target_plan_stage_id", None)
-        or (item.get("target_plan_stage_id") if isinstance(item, dict) else "")
-    )
-    return bool(target) and target == step
 
 
-def scope_evidence_queue_to_runtime_step(
-    *,
-    pending: list[Any],
-    deferred: list[Any],
-    adopted: list[Any],
-    rejected: list[Any],
-    history: list[Any] | None = None,
-    current_step: str = "",
-    recovered: bool = False,
-    current_plan_id: str = "",
-    current_stage_id: str = "",
-) -> dict[str, list[Any]]:
-    """Live pending/adopt follow recovered current_step. Older items stay history.
-
-    Non-bound pending items (no step binding at all) surface in the
-    ``unscoped`` bucket so they stay actionable; pending items explicitly bound
-    to another step stay history, as do non-bound deferred/adopted/rejected.
-    """
-
-    def _item_target_stage(item: Any) -> str:
-        return _text(
-            getattr(item, "target_plan_stage_id", None)
-            or (item.get("target_plan_stage_id") if isinstance(item, dict) else "")
-        )
-
-    def _partition(
-        items: list[Any], *, pending_bucket: bool = False
-    ) -> tuple[list[Any], list[Any], list[Any]]:
-        live: list[Any] = []
-        historic: list[Any] = []
-        unscoped: list[Any] = []
-        for item in items:
-            target_plan = _text(
-                getattr(item, "target_plan_id", None)
-                or (item.get("target_plan_id") if isinstance(item, dict) else "")
-            )
-            if target_plan and target_plan != _text(current_plan_id):
-                historic.append(item)
-                continue
-            if target_plan and _item_target_stage(item) != _text(current_stage_id):
-                historic.append(item)
-                continue
-            if not recovered or not _text(current_step):
-                live.append(item)
-                continue
-            if evidence_bound_to_runtime_step(item, current_step):
-                live.append(item)
-                continue
-            target_stage = _item_target_stage(item)
-            if pending_bucket and not target_stage:
-                # No binding at all: keep it visible as unscoped pending.
-                unscoped.append(item)
-            else:
-                # Explicitly bound elsewhere (or non-pending): history as today.
-                historic.append(item)
-        return live, historic, unscoped
-
-    live_pending, pending_history, pending_unscoped = _partition(list(pending), pending_bucket=True)
-    live_deferred, deferred_history, _deferred_unscoped = _partition(list(deferred))
-    live_adopted, adopted_history, _adopted_unscoped = _partition(list(adopted))
-    live_rejected, rejected_history, _rejected_unscoped = _partition(list(rejected))
-    historic = [
-        *list(history or []),
-        *pending_history,
-        *deferred_history,
-        *adopted_history,
-        *rejected_history,
-    ]
-    seen: set[str] = set()
-    unique_history: list[Any] = []
-    for item in historic:
-        item_id = _text(getattr(item, "id", "") or (item.get("id") if isinstance(item, dict) else ""))
-        if item_id and item_id in seen:
-            continue
-        if item_id:
-            seen.add(item_id)
-        unique_history.append(item)
-    return {
-        "pending": live_pending,
-        "deferred": live_deferred,
-        "adopted": live_adopted,
-        "rejected": live_rejected,
-        "history": unique_history,
-        "unscoped": pending_unscoped,
-    }
 
 
 def _structured_string_list(value: Any) -> list[str]:

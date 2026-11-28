@@ -1279,10 +1279,10 @@ async def _handle_save_formal_plan(context: ToolContext, args: dict[str, Any]) -
         logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
     leftover_plan, leftover_runtime, _leftover_task = _leftover_training_persist_identity(context)
-    from ...memory.workspace_recovery import (
-        leftover_formal_plan_identity_labels,
-        leftover_formal_plan_is_live_for_fill,
+    from ...core.workspace_live_identity import (
+        is_formal_plan_live_for_fill as leftover_formal_plan_is_live_for_fill,
     )
+    from ...core.workspace_scope_runtime import leftover_formal_plan_identity_labels
 
     live_existing = bool(
         existing is not None

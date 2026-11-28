@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..core.models import EvidenceItem, EvidenceQueueSnapshot
-from .workspace_recovery import (
+from ..core.workspace_scope_runtime import (
     scope_evidence_items_to_workspace,
     scope_evidence_queue_to_runtime_step,
 )

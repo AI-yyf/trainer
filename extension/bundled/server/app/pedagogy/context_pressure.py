@@ -132,7 +132,7 @@ def _pressure_plan_runtime(
 
     if plan is not None:
         return None
-    from ..memory.workspace_recovery import PLAN_RUNTIME_KEY, select_plan_runtime_for_pressure
+    from ..core.workspace_scope_runtime import PLAN_RUNTIME_KEY, select_plan_runtime_for_pressure
 
     scope_id = _text(workspace_id) or _text(workspace.get("workspace_id") or workspace.get("workspaceId"))
     raw = plan_runtime if plan_runtime is not None else workspace.get(PLAN_RUNTIME_KEY) or workspace.get("latestPlanRuntime")

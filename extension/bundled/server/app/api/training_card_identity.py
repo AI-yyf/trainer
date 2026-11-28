@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from ..core.models import EvaluateCurrentFileRequest
-from ..memory.workspace_recovery import PLAN_RUNTIME_KEY, select_plan_runtime_for_scope
+from ..core.workspace_scope_runtime import PLAN_RUNTIME_KEY, select_plan_runtime_for_scope
 
 _LEFTOVER_NOT_LIVE_MISMATCH = (
     "Recovered training card is leftover-not-live or does not match live "

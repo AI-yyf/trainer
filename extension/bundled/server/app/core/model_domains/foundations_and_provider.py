@@ -469,8 +469,10 @@ class LearningPlan(BaseModel):
 
     @model_validator(mode="after")
     def sync_compat_fields(self, info: ValidationInfo) -> "LearningPlan":
-        from app.memory.workspace_recovery import (
-            leftover_formal_plan_is_live_for_fill,
+        from app.core.workspace_live_identity import (
+            is_formal_plan_live_for_fill as leftover_formal_plan_is_live_for_fill,
+        )
+        from app.core.workspace_scope_runtime import (
             live_plan_current_step_fill,
             live_plan_next_after_current,
         )

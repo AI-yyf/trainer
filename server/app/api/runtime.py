@@ -31,6 +31,13 @@ from ..core.models import (
     WorkbenchSnapshot,
     utc_now_iso,
 )
+from ..core.workspace_live_identity import (
+    is_formal_plan_live_for_fill as leftover_formal_plan_is_live_for_fill,
+)
+from ..core.workspace_scope_runtime import (
+    PROVIDER_CAPABILITY_KEY,
+    stamp_produced_workspace_record,
+)
 from ..db.repository import TrainerRepository
 from ..evaluator.service import EvaluatorService
 from ..goal.service import GoalService
@@ -39,11 +46,6 @@ from ..llm.provider_protocols import normalize_provider_protocol
 from ..llm.provider_service import ProviderService
 from ..llm.vision_challenge import VISION_PROBE_VERSION
 from ..memory.service import MemoryService
-from ..memory.workspace_recovery import (
-    PROVIDER_CAPABILITY_KEY,
-    leftover_formal_plan_is_live_for_fill,
-    stamp_produced_workspace_record,
-)
 from ..pedagogy.service import PedagogyService
 from ..planner.service import PlannerService
 from ..research.service import ResearchOrchestratorService

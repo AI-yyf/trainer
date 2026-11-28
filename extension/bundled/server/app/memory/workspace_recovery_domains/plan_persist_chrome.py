@@ -25,13 +25,40 @@ from ...core.workspace_live_identity import (
 from ...core.workspace_live_identity import (
     stale_formal_training_labels as leftover_formal_training_labels,
 )
+from ...core.workspace_scope_runtime import (
+    PLAN_RUNTIME_KEY as PLAN_RUNTIME_KEY,
+)
+from ...core.workspace_scope_runtime import (
+    PROVIDER_CAPABILITY_KEY as PROVIDER_CAPABILITY_KEY,
+)
+from ...core.workspace_scope_runtime import (
+    _formal_plan_candidate_focus as _formal_plan_candidate_focus,
+)
+from ...core.workspace_scope_runtime import (
+    _revision as _revision,
+)
+from ...core.workspace_scope_runtime import (
+    _verify_plan_advance_payload as _verify_plan_advance_payload,
+)
+from ...core.workspace_scope_runtime import (
+    leftover_formal_plan_identity_labels as leftover_formal_plan_identity_labels,
+)
+from ...core.workspace_scope_runtime import (
+    live_coach_stage_label as live_coach_stage_label,
+)
+from ...core.workspace_scope_runtime import (
+    live_plan_current_step_fill as live_plan_current_step_fill,
+)
+from ...core.workspace_scope_runtime import (
+    live_plan_next_after_current as live_plan_next_after_current,
+)
+from ...core.workspace_scope_runtime import (
+    normalize_plan_runtime_recovery as normalize_plan_runtime_recovery,
+)
+from ...core.workspace_scope_runtime import (
+    stamp_workspace_scope as stamp_workspace_scope,
+)
 from ..transfer_skills import describe_transfer_skill_state, normalize_transfer_skill_state_record
-
-PLAN_RUNTIME_KEY = "latest_plan_runtime"
-
-
-PROVIDER_CAPABILITY_KEY = "latest_provider_capability"
-
 
 STREAMING_CHECKPOINT_KEY = "latest_streaming_checkpoint"
 
@@ -91,8 +118,6 @@ def _text(value: Any) -> str:
     return str(value or "").strip()
 
 
-def _revision(value: Any, fallback: int = 1) -> int:
-    return int(value) if isinstance(value, int) and value > 0 else fallback
 
 
 def utc_now_iso() -> str:
@@ -103,74 +128,8 @@ def strip_secrets(value: dict[str, Any]) -> dict[str, Any]:
     return {key: item for key, item in value.items() if key.casefold() not in SECRET_KEYS}
 
 
-def normalize_plan_runtime_recovery(value: Any) -> dict[str, Any] | None:
-    if not isinstance(value, dict):
-        return None
-    plan_id = _text(value.get("plan_id") or value.get("planId"))
-    current_stage_id = _text(value.get("current_stage_id") or value.get("currentStageId"))
-    current_step = _text(value.get("current_step") or value.get("currentStep"))
-    blocked_reason = _text(value.get("blocked_reason") or value.get("blockedReason"))
-    resume_state = _text(value.get("resume_state") or value.get("resumeState")).replace("-", "_")
-    if resume_state not in {"interrupted", "in_progress", "waiting"}:
-        resume_state = "interrupted"
-    workspace_id = _text(value.get("workspace_id") or value.get("workspaceId"))
-    recovered_without_step = resume_state in {"in_progress", "waiting"} and bool(workspace_id)
-    if not plan_id and not current_stage_id and not current_step and not blocked_reason:
-        if not recovered_without_step:
-            return None
-    verify_raw = value.get("verify_method") or value.get("verifyMethod") or []
-    next_verify_raw = value.get("next_verify_method") or value.get("nextVerifyMethod") or []
-    return {
-        "revision": _revision(value.get("revision")),
-        "workspace_id": _text(value.get("workspace_id") or value.get("workspaceId")) or None,
-        "request_id": _text(value.get("request_id") or value.get("requestId")) or None,
-        "plan_id": plan_id or None,
-        "selected_card_id": _text(value.get("selected_card_id") or value.get("selectedCardId"))
-        or None,
-        "current_stage_id": current_stage_id or None,
-        "current_step": current_step or None,
-        "frozen": value.get("frozen") is True,
-        "blocked_reason": blocked_reason or None,
-        "why_now": _text(value.get("why_now") or value.get("whyNow")) or None,
-        "verify_method": [item for item in verify_raw if str(item).strip()] if isinstance(verify_raw, list) else [],
-        "next_after_current": _text(value.get("next_after_current") or value.get("nextAfterCurrent")) or None,
-        "next_why_now": _text(
-            value.get("next_why_now")
-            or value.get("nextWhyNow")
-            or value.get("why_after_current")
-            or value.get("whyAfterCurrent")
-        )
-        or None,
-        "next_blocked_reason": _text(
-            value.get("next_blocked_reason")
-            or value.get("nextBlockedReason")
-            or value.get("blocked_after_current")
-            or value.get("blockedAfterCurrent")
-        )
-        or None,
-        "next_verify_method": [item for item in next_verify_raw if str(item).strip()]
-        if isinstance(next_verify_raw, list)
-        else [],
-        "evidence_binding": _text(value.get("evidence_binding") or value.get("evidenceBinding")) or None,
-        "resume_state": resume_state,
-        "updated_at": _text(value.get("updated_at") or value.get("updatedAt")) or None,
-        **_verify_plan_advance_payload(value),
-    }
 
 
-def _verify_plan_advance_payload(value: dict[str, Any]) -> dict[str, Any]:
-    advance = value.get("verify_plan_advance") or value.get("verifyPlanAdvance")
-    if not isinstance(advance, dict) or not advance:
-        return {}
-    return {
-        "verify_plan_advance": {
-            "advanced": bool(advance.get("advanced")),
-            "what": _text(advance.get("what")),
-            "why": _text(advance.get("why")),
-            "next": _text(advance.get("next")),
-            "plan_id": _text(advance.get("plan_id") or advance.get("planId")) or None,
-        }
-    }
 
 
 def live_evidence_binding(
@@ -994,25 +953,6 @@ def leftover_settings_learner_project_onboarding_is_not_live(
 
 
 
-def leftover_formal_plan_identity_labels(*, plan: Any | None = None) -> set[str]:
-    """Leftover identity is title/summary/current_step/stage, not next_after_current."""
-
-    labels: set[str] = set()
-    if plan is None:
-        return labels
-    for value in (
-        getattr(plan, "title", ""),
-        getattr(plan, "summary", ""),
-        getattr(plan, "current_step", ""),
-    ):
-        text = _text(value)
-        if text:
-            labels.add(text)
-    for stage in getattr(plan, "stages", None) or []:
-        stage_title = _text(getattr(stage, "title", ""))
-        if stage_title:
-            labels.add(stage_title)
-    return labels
 
 
 
@@ -1120,79 +1060,8 @@ def live_plan_overlay_fields(
     }
 
 
-def live_plan_current_step_fill(
-    *,
-    plan: Any | None = None,
-    runtime: dict[str, Any] | None = None,
-    existing: dict[str, Any] | None = None,
-    current_step: str = "",
-    stage_goal: str = "",
-    phase_objective: str = "",
-    summary: str = "",
-    objective: str = "",
-    title: str = "",
-) -> str:
-    """Empty current_step stays empty when leftover plan is not live identity."""
-
-    step = _text(current_step)
-    if step:
-        return step
-    live_plan = leftover_formal_plan_is_live_for_fill(
-        plan=plan,
-        runtime=runtime,
-        existing=existing,
-    )
-    leftover = leftover_formal_training_labels(
-        plan=plan,
-        live_plan=live_plan,
-        live_task=True,
-    )
-    if not live_plan:
-        return ""
-    for candidate in (stage_goal, phase_objective):
-        text = _text(candidate)
-        if text and text not in leftover:
-            return text
-    return _text(summary) or _text(objective) or _text(title)
 
 
-def live_plan_next_after_current(
-    *,
-    plan: Any | None = None,
-    runtime: dict[str, Any] | None = None,
-    existing: dict[str, Any] | None = None,
-    next_after_current: str = "",
-    next_stage_goal: str = "",
-    next_phase_objective: str = "",
-) -> str:
-    """Leftover stage goals do not land in next_after_current after leftover-not-live."""
-
-    live_plan = leftover_formal_plan_is_live_for_fill(
-        plan=plan,
-        runtime=runtime,
-        existing=existing,
-    )
-    leftover = leftover_formal_training_labels(
-        plan=plan,
-        live_plan=live_plan,
-        live_task=True,
-    )
-    if plan is not None and not live_plan:
-        for stage in getattr(plan, "stages", None) or []:
-            goal = _text(getattr(stage, "goal", ""))
-            if goal:
-                leftover.add(goal)
-    nxt = _text(next_after_current)
-    generic = "Review the result and decide whether to widen scope."
-    if live_plan:
-        return nxt or _text(next_stage_goal) or _text(next_phase_objective) or generic
-    if nxt and nxt not in leftover:
-        return nxt
-    for candidate in (next_stage_goal, next_phase_objective):
-        text = _text(candidate)
-        if text and text not in leftover:
-            return text
-    return generic
 
 
 def live_training_mint_anchors(
@@ -1246,23 +1115,6 @@ def live_training_mint_anchors(
     return {"why_now": why, "target_skill": skill, "focus_area": focus}
 
 
-def _formal_plan_candidate_focus(plan: Any | None) -> str:
-    if plan is None:
-        return ""
-    stages = list(getattr(plan, "stages", None) or [])
-    current_stage_id = _text(getattr(plan, "current_stage_id", ""))
-    active_stage = next(
-        (
-            stage
-            for stage in stages
-            if _text(getattr(stage, "id", "")) == current_stage_id
-            or _text(getattr(stage, "status", "")) == "active"
-        ),
-        stages[0] if stages else None,
-    )
-    if active_stage is not None:
-        return _text(getattr(active_stage, "title", ""))
-    return _text(getattr(plan, "title", ""))
 
 
 def live_coach_focus_area(
@@ -1321,45 +1173,6 @@ def live_coach_focus_area(
     return focus
 
 
-def live_coach_stage_label(
-    *,
-    plan: Any | None = None,
-    runtime: dict[str, Any] | None = None,
-    existing: dict[str, Any] | None = None,
-    stage_title: str = "",
-) -> str:
-    """Live stage object is recovered current_step, not leftover formal title."""
-
-    runtime = runtime if isinstance(runtime, dict) else {}
-    existing = existing if isinstance(existing, dict) else {}
-    recovered_step = (
-        _text(runtime.get("current_step"))
-        or _text(existing.get("current_step"))
-    )
-    recovered = bool(runtime or existing)
-    if recovered and not recovered_step:
-        return ""
-    live_plan = formal_plan_is_live_runtime_identity(
-        plan=plan,
-        runtime=runtime,
-        existing=existing,
-        current_step=recovered_step,
-    )
-    label = _text(stage_title) or _formal_plan_candidate_focus(plan)
-    if live_plan:
-        return label
-    # Orphaned pressure-only runtime (no formal plan) must not invent stage/task chrome.
-    # Tight budget / leftover blocker urgency may still shrink pedagogy, but not mint a live task.
-    if plan is None and recovered:
-        return ""
-    leftover = leftover_formal_training_labels(
-        plan=plan,
-        live_plan=False,
-        live_task=True,
-    )
-    if label in leftover or not label:
-        return recovered_step
-    return label
 
 
 def live_plan_artifact_stage_chrome(
@@ -1537,13 +1350,3 @@ def live_plan_refresh_step_why(
     return {"current_step": step, "why_now": why, "next_after_current": nxt}
 
 
-def stamp_workspace_scope(record: dict[str, Any] | None, workspace_id: str) -> dict[str, Any] | None:
-    if record is None:
-        return None
-    existing = _text(record.get("workspace_id"))
-    scope = _text(workspace_id)
-    if existing and scope and existing != scope:
-        return None
-    scoped = dict(record)
-    scoped["workspace_id"] = existing or scope or None
-    return scoped
