@@ -320,7 +320,7 @@ En proyectos sobre Linux/SSH remotos, Trainer divide **cerebro local y manos rem
 | `extension/webview/src/` | Workbench React: 2 destinos, cajón, compositor único, Shiki/KaTeX/Mermaid, 8 idiomas | `233` TS/TSX + `53` CSS (~`120.507` líneas) |
 | `extension/tests/` | Suite `node:test`: host, gobernanza compartida, i18n, captura web, seguridad | `161` archivos · **`1.460` tests** |
 | `server/app/` | Sidecar FastAPI: agente ReAct, pedagogía RethinkFun, FSRS, ingesta, evaluador | `234` archivos Python (~`178.520` líneas) |
-| `server/tests/` | Suite backend `pytest` de rutas API, pedagogía, memoria y protocolos | `84` archivos · **`2.746` tests recogidos** |
+| `server/tests/` | Suite backend `pytest` de rutas API, pedagogía, memoria y protocolos | `86` archivos · **`2.767` tests recogidos** |
 | `shared/src/` | Módulos TypeScript puros deterministas compartidos entre Host, Webview y Tests | `77` módulos (~`30.414` líneas · `523` exports) |
 | `remote-extension/src/` | Companion Remote-SSH (`extensionKind: ["workspace"]`) | `2` archivos TS (`746` líneas) |
 | `browser-extension/` | Extensión Chromium MV3: popup, colas offline, menús contextuales y Side Panel | `9` archivos (`7.245` líneas) |
@@ -349,7 +349,7 @@ Todas las rutas HTTP de estado devuelven el contrato único **`WorkbenchSnapshot
 
 | Compuerta | Alcance y resultado verificado | Comando |
 |---|---|---|
-| **Tests del servidor (`pytest`)** | **84 archivos · 2.746 tests** (más subtests) | `npm run test:server` |
+| **Tests del servidor (`pytest`)** | **86 archivos · 2.767 tests** (más subtests) | `npm run test:server` |
 | **Tests de extensión (`node:test`)** | **161 archivos · 1.460 tests** (`1.460` aprobados, `0` omitido por plataforma, `0` fallos) | `npm run test:extension` |
 | **Análisis estático y tipos** | `ruff check` (`0`) · `pyright` (`0`) · CSS + `tsc -b` (`0`) | `npm run check && npm run verify:server-pyright` |
 | **Geometría UI** | Soberanía del compositor único, 2 destinos, sin desbordamiento (`340/420/460px`, dark/light, zh/en) | `npm run verify:ui-geometry` |

@@ -232,7 +232,7 @@ Trainer 的状态流直观教学法直接受技术博主 **[RethinkFun](https://
 | 保持用户 git 仓库干净 | ⚠️ 易混入产物 | ⚠️ | 不适用 | ✅ 唯一 `<LibraryRoot>`，源码仓零写入 |
 | FSRS 遗忘曲线调度 | ❌ | ❌ | ✅ | ✅ 支持心流防打断 |
 | 权限与远端安全分级 | ❌ | ⚠️ 仅基础信任弹窗 | ❌ | ✅ 六级权限阶梯 + 远端越权硬锁 |
-| 开源测试保障规模 | 闭源 | 闭源 | 闭源 | ✅ **4,206 个单元/集成用例 + 105 个 E2E 用例** |
+| 开源测试保障规模 | 闭源 | 闭源 | 闭源 | ✅ **4,227 个单元/集成用例 + 105 个 E2E 用例** |
 | 完整多语言适配 | ⚠️ | ⚠️ | ⚠️ | ✅ **8 语言**全量 CI 完整性守卫 |
 
 > 其他工具让你“交付得更快”；**Trainer 让你“真的会写了”。**
@@ -320,7 +320,7 @@ Trainer 的状态流直观教学法直接受技术博主 **[RethinkFun](https://
 | `extension/webview/src/` | React 工作台：两入口一对话、学习抽屉、唯一输入框、Shiki/KaTeX/Mermaid、8 语言文案 | `233` 个 TS/TSX + `53` CSS（约 `120,507` 行） |
 | `extension/tests/` | `node:test` 测试集：宿主行为、共享治理、i18n 完整性、浏览器采集、权限安全 | `161` 个文件 · **`1,460` 个用例** |
 | `server/app/` | FastAPI 后端：ReAct 代理、RethinkFun 内核、记忆/FSRS、文档解析、沙箱验证、权限门控 | `234` 个 Python 文件（约 `178,520` 行） |
-| `server/tests/` | 后端 `pytest` 测试集：API 路由、教学内核、FSRS/记忆、5 协议、安全隔离 | `84` 个文件 · **`2,746` 个收集用例** |
+| `server/tests/` | 后端 `pytest` 测试集：API 路由、教学内核、FSRS/记忆、5 协议、安全隔离 | `86` 个文件 · **`2,767` 个收集用例** |
 | `shared/src/` | 宿主、Webview 与测试共用的确定性治理纯函数与协议定义 | `77` 个模块（约 `30,414` 行 · `523` 导出符号） |
 | `remote-extension/src/` | Remote-SSH 远端伴侣扩展（`extensionKind: ["workspace"]`） | `2` 个 TS 文件（`746` 行） |
 | `browser-extension/` | Chromium MV3 快速采集弹窗、离线投递队列、右键菜单与 Side Panel 对话端 | `9` 个源码文件（`7,245` 行） |
@@ -349,12 +349,12 @@ Trainer 的状态流直观教学法直接受技术博主 **[RethinkFun](https://
 
 | 门禁 | 实测覆盖与结果 | 执行命令 |
 |---|---|---|
-| **后端测试 (`pytest`)** | **84 个文件 · 2,746 个测试用例** | `npm run test:server` |
+| **后端测试 (`pytest`)** | **86 个文件 · 2,767 个测试用例** | `npm run test:server` |
 | **前端与共享 (`node:test`)** | **161 个文件 · 1,460 个测试**（`1,460` 通过，`0` 跳过，`0` 失败） | `npm run test:extension` |
 | **静态 lint 与类型检查** | `ruff check`（0 错）· `pyright`（0 错，覆盖 `server/app` 与 `server/tests`）· CSS 节分段 + `tsc -b`（0 错） | `npm run check && npm run verify:server-pyright` |
 | **UI 几何门禁** | 唯一输入框主权、两入口壳层、无溢出校验（`340/420/460px` × 深浅色 × 中英） | `npm run verify:ui-geometry` |
 | **i18n 完整性门禁** | **194** 处 `appUiCopy` + **196** 处 `settingsText` + **273** 处 `hostCommandCopy` 覆盖 **8 语言**（0 缺失 / 0 串文） | `npm run verify:i18n` |
-| **文案词汇与凭据安全** | **53** 份 UI 文件零内部黑话泄露 · **5,254** 份文件扫描零明文密钥泄露 | `npm run verify:copy-vocabulary && npm run verify:credentials` |
+| **文案词汇与凭据安全** | **53** 份 UI 文件零内部黑话泄露 · **5,275** 份文件扫描零明文密钥泄露 | `npm run verify:copy-vocabulary && npm run verify:credentials` |
 | **E2E 与 Remote-SSH** | **6** 个 Playwright E2E 测试集（`105` 条测试，本地全部通过）+ 真实 sidecar 矩阵与 Ubuntu Remote-SSH L2（`20/20`，最后实测于 2026-11-22） | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
 | **CI 跨平台发布构建** | **三大原生桌面目标**：`win32-x64`、`darwin-arm64`、`linux-x64`（Windows/Linux ARM64 暂未提供 CI 构建证明） | `.github/workflows/release.yml` |
 
@@ -407,6 +407,6 @@ Trainer 的状态流直观教学法直接受技术博主 **[RethinkFun](https://
 
 **// 训练你的 AI · 与 AI 共同成长**
 
-`v1.6.4` · 由咖啡、FSRS、RethinkFun 状态流教学内核、4,311 个自动化测试，以及一颗拒绝替你写代码的心共同构筑。
+`v1.6.4` · 由咖啡、FSRS、RethinkFun 状态流教学内核、4,332 个自动化测试，以及一颗拒绝替你写代码的心共同构筑。
 
 </div>

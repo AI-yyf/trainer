@@ -320,7 +320,7 @@ Pour tes espaces de travail Linux/SSH distants, Trainer sépare **cerveau local 
 | `extension/webview/src/` | Workbench React : 2 destinations, tiroir, compositeur unique, Shiki/KaTeX/Mermaid, 8 langues | `233` TS/TSX + `53` CSS (~`120 507` lignes) |
 | `extension/tests/` | Suite `node:test` : hôte, gouvernance partagée, i18n, capture web, sécurité | `161` fichiers · **`1 460` tests** |
 | `server/app/` | Sidecar FastAPI : agent ReAct, pédagogie RethinkFun, FSRS, ingestion, évaluateur | `234` fichiers Python (~`178 520` lignes) |
-| `server/tests/` | Suite backend `pytest` : routes API, pédagogie, mémoire, protocoles, autorité | `84` fichiers · **`2 746` tests collectés** |
+| `server/tests/` | Suite backend `pytest` : routes API, pédagogie, mémoire, protocoles, autorité | `86` fichiers · **`2 767` tests collectés** |
 | `shared/src/` | Modules TypeScript purs déterministes partagés entre Hôte, Webview et Tests | `77` modules (~`30 414` lignes · `523` exports) |
 | `remote-extension/src/` | Companion Remote-SSH (`extensionKind: ["workspace"]`) | `2` fichiers TS (`746` lignes) |
 | `browser-extension/` | Extension Chromium MV3 : popup, files hors-ligne, menus contextuels et Side Panel | `9` fichiers (`7 245` lignes) |
@@ -349,7 +349,7 @@ Toutes les routes HTTP d'état retournent l'objet canonique **`WorkbenchSnapshot
 
 | Garantie | Portée et résultat vérifié | Commande |
 |---|---|---|
-| **Tests serveur (`pytest`)** | **84 fichiers · 2 746 tests** (plus sous-tests) | `npm run test:server` |
+| **Tests serveur (`pytest`)** | **86 fichiers · 2 767 tests** (plus sous-tests) | `npm run test:server` |
 | **Tests extension (`node:test`)** | **161 fichiers · 1 460 tests** (`1 460` réussis, `0` ignoré selon plateforme, `0` échec) | `npm run test:extension` |
 | **Analyse statique & types** | `ruff check` (`0`) · `pyright` (`0`) · CSS + `tsc -b` (`0`) | `npm run check && npm run verify:server-pyright` |
 | **Géométrie UI** | Souveraineté du compositeur unique, 2 destinations, sans débordement (`340/420/460px`, dark/light, zh/en) | `npm run verify:ui-geometry` |

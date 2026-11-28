@@ -320,7 +320,7 @@ Für Remote-Linux/SSH-Workspaces trennt Trainer sauber zwischen **lokalem Gehirn
 | `extension/webview/src/` | React-Workbench: 2 Ziele, Drawer, Single-Composer, Shiki/KaTeX/Mermaid, 8 Sprachen | `233` TS/TSX + `53` CSS (~`120.507` Zeilen) |
 | `extension/tests/` | `node:test`-Suite: Host, Governance, i18n, Browser-Capture, Security | `161` Dateien · **`1.460` Tests** |
 | `server/app/` | FastAPI-Sidecar: Agent Loop, RethinkFun-Pädagogik, Memory/FSRS, Ingest, Evaluator | `234` Python-Dateien (~`178.520` Zeilen) |
-| `server/tests/` | Backend-`pytest`-Suite für API, Pädagogik, Memory, Protokolle & Authority | `84` Dateien · **`2.746` gesammelte Tests** |
+| `server/tests/` | Backend-`pytest`-Suite für API, Pädagogik, Memory, Protokolle & Authority | `86` Dateien · **`2.767` gesammelte Tests** |
 | `shared/src/` | Geteilte deterministische Governance-Module für Host, Webview & Tests | `77` Module (~`30.414` Zeilen · `523` Exporte) |
 | `remote-extension/src/` | Remote-SSH Companion (`extensionKind: ["workspace"]`) | `2` TS-Dateien (`746` Zeilen) |
 | `browser-extension/` | Chromium MV3 Popup, Offline-Queues, Kontextmenüs & Side Panel | `9` Dateien (`7.245` Zeilen) |
@@ -349,7 +349,7 @@ Alle zustandsführenden Haupt-HTTP-Routen liefern ein einheitliches **`Workbench
 
 | Gate | Umfang & Verifiziertes Ergebnis | Befehl |
 |---|---|---|
-| **Server-Tests (`pytest`)** | **84 Dateien · 2.746 Tests** (inkl. Subtests) | `npm run test:server` |
+| **Server-Tests (`pytest`)** | **86 Dateien · 2.767 Tests** (inkl. Subtests) | `npm run test:server` |
 | **Extension & Shared (`node:test`)** | **161 Dateien · 1.460 Tests** (`1.460` bestanden, `0` Plattform-Skip, `0` Fehler) | `npm run test:extension` |
 | **Statische Analyse & Typen** | `ruff check` (`0` Fehler) · `pyright` (`0` Fehler) · CSS + `tsc -b` (`0` Fehler) | `npm run check && npm run verify:server-pyright` |
 | **UI-Geometrie-Gate** | Single-Composer-Souveränität, 2-Ziele-Shell, Overflow-Checks (`340/420/460px`, dark/light, zh/en) | `npm run verify:ui-geometry` |

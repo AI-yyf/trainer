@@ -817,7 +817,7 @@ Other models on the same gateway, raw: `MiniMax-M2.7-highspeed` first event 1.0�
 - *The stored next step was the reply's opening prose.* A reply without a `下一步：` label made both continuity builders fall back to the first 120 characters of the reply, so `next_step` was `## 发生了什么 `get(d, k)` 里执行的是…` (a heading plus the start of an explanation), and that fragment was fed into the next turn as the step to continue; a bare "你好" then continued it and produced a patch. Now: the opening prose is never used; a reply's closing instruction counts when it reads as one, after specific thread hints and before the neutral default (`closing_action_step` in `llm/reply_continuity.py`); the prompt requires a labelled last line in the reply's language (named once, in the Language section, because a first version that said "the label in your language" from an English rule produced `` `Next step:` `` inside Chinese replies); the reader tolerates a label wrapped in backticks or quotes. Label compliance went from 0 of 12 to 12 of 12; every `next_step` is now a concrete action. Tests: `test_next_step_stays_an_action.py` (10, fixtures are excerpts of real replies).
 - *The default pace was a lecture that rewrote the learner's code.* "这段为什么会报 KeyError？" (491–1,544 characters, two complete rewrites of the learner's `get`) became 399–543 characters with the lines to change named and no rewrite; three model calls became one. The static prefix now states the default pace with a size, gates the state-driven lecture form behind an explicit deep-explanation request, asks for at most two questions when an answer is withheld, tells the model that evidence already in the prompt has been read (no `project_read` for the current file), and asks for brief reasoning. The English prompt still contains no CJK (480 variants checked).
 - *The stage line while a project file is read said "正在检索资料".* It now names the file: "正在查看 app.py" (eight languages; `trainerStageShowsTheFile.test.js`, 5).
-- Not changed: the host status copy still says "正在向已配置的模型请求回复。" / "模型正在推演思路。"; a turn with long hidden reasoning shows nothing but that status for up to 14 s (one call took 65 s for 1,317 reasoning tokens); there is no stalled-stream watchdog (the generation client has no read timeout).
+- Not changed: the host status copy still says "正在向已配置的模型请求回复。" / "模型正在推演思路。"; a turn with long hidden reasoning shows nothing but that status for up to 14 s (one call took 65 s for 1,317 reasoning tokens); the agent loop had no idle watchdog and, on reasoning-first gateways, no step bound either; the generation client had no read timeout (both changed in the third pass below).
 
 ### Contract §10 story, first half, with the real model
 
@@ -855,3 +855,59 @@ Backend pytest 2,746 passed (84 files); extension node:test 1,460 passed, 0 fail
 ### Open for the owner
 
 (1) Contract §10 still needs the human teaching-quality sign-off, and the host attestation path for "independent completion". (2) First visible content ≤ 2 s is not met on this gateway: the floor is its first event plus hidden reasoning; options are a faster endpoint or model, a stalled-stream watchdog and a read timeout for generation, and a prefix that really is session-invariant (cache hits vary 0–7.9k tokens). (3) Windows `library_exec`; the 975 `leftover_*` references; the 1,360 old tests that stay out by the owner's decision (924 of them pass at HEAD). (4) The host status copy ("已配置的模型") is system wording; the host copy language follows VS Code while the webview shell follows the OS on first run. (5) One gateway call spent 65 s on 1,317 hidden reasoning tokens; the prompt asks for brief reasoning, the gateway ignores every field that could cap it.
+
+## 2026-11-28 (third pass) — stream guards, a cacheable prompt prefix, and a correction to the earlier measurements
+
+After the second report the remaining gaps were: the two contract §5 budgets with a real model, the 65–73 s outlier turn, the prompt cache, the §10 sign-off, and two owner decisions. All code below is committed to `main`; nothing is pushed.
+
+**A correction first.** The probes of the second pass sent the answer mode under a field the API does not read (`mode`; the request field is `answer_mode`), so every "after" number there and the first §10 story run were measured with the policy the route falls back to, which turned out to be `direct`, not `guided`. The qualitative findings held — no rewrite of learner code, a labelled next step in every turn, fewer model calls — but they were observed under `direct`. Everything below was measured with the field fixed.
+
+### Stream guards (`llm/agent_loop.py`, `llm/provider/runtime_shared.py`)
+
+What existed: the plain coaching stream had a 120 s idle ceiling; the agent loop had step budgets of 90 s (first step) and 24 s — but `ProviderService._agent_loop_timeout_kwargs` passes `math.inf` for reasoning-first gateways (MiniMax M3.x among them), so there a step had no bound at all; and the transport read timeout was `None`. On such a gateway a dead connection held the learner until they cancelled.
+
+- *Stall.* A stream that produces no event for 60 s is dead, not slow: the step ends as a stall (`ProviderStreamStalledError`, a `TimeoutError`; the final frame carries `stop_reason: "timeout"` and `stalled: true`).
+- *First-output budget.* Until the learner has seen visible text in a turn, any step that produces nothing — no text, no tool call — within 20 s is dropped and requested once more with an instruction appended to the system message ("do not deliberate further"). Once per turn; the second attempt is capped at 120 s; the instruction is sent to the provider only and never enters the history that later steps or the session see. A step that only deliberates is exactly the measured outlier (65 s on 1,317 reasoning tokens before a tool call; another 18.5 s before the answer after its tool calls).
+- *Transport backstop.* `read=300 s`: five minutes without one byte is a dead connection, never a model still thinking. The reasoning budget itself is still unlimited by design (the comment in `runtime_shared.py` explains why a 45 s cap was wrong).
+- Tests: `test_agent_stream_watchdogs.py` (14) — stall reported and the upstream iterator closed, a talkative stream is never stalled, the step budget still wins, restart once with the hint, no restart once text was shown, a tool call counts as output, a later step that owes the first word is covered too, the hint never reaches the next step, a stalled first step ends the turn as a stall. `test_provider_service.py` now pins the backstop instead of `read is None`.
+
+Seen with the real model: the budget fired once in 18 turns (a tool-decision step silent for more than 20 s); the retry produced its tool call in 3.1 s. That turn still took 31.5 s to its first visible text because it is a four-step tool chain (`learning_inspect` twice, `project_read` twice); the budget removes the silent deliberation, not the chain.
+
+### A prompt prefix that a cache can hold (`llm/prompt_domains/`)
+
+The system prompts of consecutive turns were recorded through the proxy and diffed: the first difference was at character 147 in one pair and 237 in another — inside the `Learner profile` block that opened the prompt, because the pedagogy service adapts the goal, the teaching style and the answer policy between turns. So the first request of every turn diverged from the gateway's cache after 128–188 tokens, and only the calls inside one turn (after tool results) hit it.
+
+The prefix is now ordered for the cache: the rules, the request priority, the tool instructions and the reply language first (14,962 characters, identical for every learner and every turn of a language), then the learner profile and the per-turn biases. Measured on the real gateway: cached tokens on each turn's first call went from 128–188 to a median of 3,400–3,700 (min 128, max 9,400 of about 11,000). The gain in time is small — the gateway's first event arrives after 1.0–2.6 s whether 200 or 9,000 tokens are cached — and the misses that remain (188 or 0) are the gateway's, not the prompt's: the invariant part is byte-identical.
+
+Tests: `test_prompt_prefix_is_session_invariant.py` (6). The existing byte-stability test and the "English prompt has no CJK" test still pass.
+
+### Contract §5 with the real model, measured properly (MiniMax-M2.7, guided policy, six turns twice; `direct` once for comparison)
+
+| Turn | Guided: first visible / complete | Direct: first visible / complete |
+|---|---|---|
+| "然后呢？" next to the error file | 17.7–31.5 s / 20.8–35.0 s (4–5 calls) | 13.4 s / 17.3 s (3 calls) |
+| "这段为什么会报 KeyError？" | 1.9–2.2 s / 3.4–3.7 s (1 call) | 2.7 s / 4.5 s |
+| "你好" | 2.1–3.1 s / 2.9–3.8 s (1 call) | 3.0 s / 5.1 s |
+| "讲解一下这个项目" | 4.6–10.5 s / 10.6–15.7 s (2 calls) | 6.1 s / 12.1 s |
+| idempotency, first question | 3.4–5.1 s / 6.6–7.1 s | 4.1 s / 6.1 s |
+| idempotency, follow-up | 4.3–7.1 s / 6.7–9.2 s | 9.4 s / 11.2 s |
+
+Guided, 12 turns: first visible content median 4.5 s (≤ 2 s in 1 of 12); complete reply median 6.9 s (≤ 6 s in 4 of 12); a labelled next step in 12 of 12. Direct, 6 turns: median 5.1 s and 8.7 s.
+
+Against the contract: the short-turn budget holds for the plain question and the greeting and is missed by the tool-using and open-ended turns; the first-visible budget is not met. What is left is the gateway's first event (1.0–2.6 s) plus hidden reasoning before the first visible token (0.4–8 s in most calls, 18.5 s in one), plus tool chains of three or four model round trips for "然后呢？" and "讲解一下这个项目". The learner does see a truthful status within 30–40 ms and the file name while a read runs.
+
+### One more defect the story run showed
+
+The coach's reply ended with its own "下一步：…" line and the server appended "这一步算过的信号是：回到最近这一轮教练主线，…" after it — a thread reminder dressed as a verification signal, riding on the coach's words. A reply that ends with its own labelled action is left as it is (1 test in `test_next_step_stays_an_action.py`).
+
+### Contract §10 story, for the owner's sign-off
+
+`.trainer-convergence/evidence/real-model-story-2026-11-28.md` holds the five learner messages, the learner's code before each turn, the coach's verbatim replies, timings, and a sign-off box. Run on the final code (guided): Monday the coach states what the code does, poses three questions and asks for the learner's own reading before any judgment (3.8 s to first text); after the learner's fix it names what is right and three ranked gaps (11.1 s; one 4-line fragment inside the learner's `charge`, flagged for the signer against §8); Thursday "只给我一句提示就好" gets a 199-character hint and no code (2.5 s). No reply rewrote a learner function. Not covered, by design: the host attestation that records "independent completion", the review, and the controlled clock.
+
+### Gates on the final tree
+
+Backend pytest 2,767 passed (86 files); extension node:test 1,460 passed, 0 failed, 0 skipped; Playwright 105 passed; installed-VSIX E2E 36/36 with a VSIX rebuilt from the final tree (fixture provider); `npm run build` exit 0; pyright 0 errors over `server/app` and `server/tests`; ruff, `npm run check`, `verify:i18n`, `verify:copy-vocabulary`, `verify:credentials` (5,275 files, 0 findings) pass; real-sidecar experience matrix 12/12 (its prefix scenario now checks the prefix per reply language and the rules the languages share); `test:structural-journey` 18 PASS / 4 BLOCKED / 0 FAIL; `verify:local-latency` 5/5; `verify:ui-geometry` 360/360
+
+### Open for the owner
+
+(1) **The §10 sign-off** — the document above. (2) **The two §5 budgets** are not met on this gateway. Options, in my order: a faster endpoint or model for the default pace; fewer model round trips in a turn (a "然后呢？" next to an error file does not need `learning_inspect` before reading the file — a tool-set question, not a latency tweak); or accept a truthful status line as the first visible content, which the contract's own wording allows. (3) **`library_exec` on Windows** — it is fail-closed there since the first pass (no kernel sandbox); accept, or commission a Windows sandbox backend (AppContainer / Job Objects) that cannot be developed or tested on this machine. (4) **The `leftover_*` isolation** — 1,251 references in 44 server files plus about 530 `leftover` mentions in the webview: predicates that keep state from an earlier session from being shown as live after a recovery or a workspace switch. Retiring it means replacing the predicates with one structural guarantee (a recovered workspace starts from nothing that was not re-verified) — a refactor of thousands of lines that needs the real-model journeys and the installed-VSIX suite as its net. My recommendation is to keep it for now and plan it as its own piece of work; the earlier refactors already pruned the webview side of it. (5) Carried over: the host status copy ("已配置的模型") and its language; the cache misses on the gateway side.

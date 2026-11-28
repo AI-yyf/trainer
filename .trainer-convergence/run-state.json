@@ -199,6 +199,19 @@
         "leftover_* references",
         "host status copy wording and language alignment"
       ]
+    },
+    "third_pass": {
+      "correction": "second-pass real-model numbers were taken under the direct policy (the probe sent `mode`, the API reads `answer_mode`); re-measured properly",
+      "stream_guards": "idle watchdog 60 s, first-output budget 20 s with one restart per turn, transport read backstop 300 s",
+      "prompt_prefix": "session-invariant rules first; cached tokens per turn's first call 128-188 -> median ~3,500",
+      "real_model_guided": "first visible median 4.5 s (<= 2 s: 1/12); complete median 6.9 s (<= 6 s: 4/12); labelled next step 12/12",
+      "signoff_document": ".trainer-convergence/evidence/real-model-story-2026-11-28.md",
+      "owner_decisions_pending": [
+        "§10 sign-off",
+        "how to reach the §5 budgets (model/endpoint, fewer tool round trips, or accept a status line as first content)",
+        "library_exec on Windows",
+        "leftover_* isolation: keep or plan the structural replacement"
+      ]
     }
   }
 }
