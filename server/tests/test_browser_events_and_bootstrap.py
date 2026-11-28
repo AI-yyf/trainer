@@ -83,6 +83,12 @@ def test_preseeded_bootstrap_token_pairs_once_and_promotes_extension_origin_for_
         assert auto_paired.json()["workspace_id"] == workspace_id
 
 
+# Wall-clock ceiling for the streaming assertions. The happy path finishes in
+# well under a second; the budget only turns a lost event or a failed producer
+# task into a readable failure instead of an endless keep-alive wait.
+_STREAM_BUDGET_SECONDS = 60.0
+
+
 def test_browser_events_stream_enforces_instance_token_and_pushes_realtime_draft_and_library_events(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -96,9 +102,13 @@ def test_browser_events_stream_enforces_instance_token_and_pushes_realtime_draft
 
     async def _exercise() -> None:
         transport = httpx.ASGITransport(app=app, client=("127.0.0.1", 51234))
+        # The transport is in-process, so client-side network timeouts do not
+        # apply; disable them explicitly so the only deadline here is
+        # _STREAM_BUDGET_SECONDS.
         async with httpx.AsyncClient(
             transport=transport,
             base_url="http://127.0.0.1:8765",
+            timeout=None,
         ) as client:
             unauth = await client.get(
                 "/browser/events/stream",
@@ -175,7 +185,26 @@ def test_browser_events_stream_enforces_instance_token_and_pushes_realtime_draft
                 params={"workspace_id": workspace_id, "max_events": 2, "heartbeat_seconds": 5.0},
             ) as stream_resp:
                 assert stream_resp.status_code == 200
-                raw_sse = (await stream_resp.aread()).decode("utf-8")
+                # The stream closes only after max_events matching events arrive;
+                # until then the server just emits keep-alives. A lost event or a
+                # failed producer would therefore wait forever, so bound the read
+                # and report the producer's state instead of stalling the suite.
+                try:
+                    raw_sse = (
+                        await asyncio.wait_for(stream_resp.aread(), timeout=_STREAM_BUDGET_SECONDS)
+                    ).decode("utf-8")
+                except TimeoutError:
+                    if not producer.done():
+                        producer.cancel()
+                    if producer.done() and not producer.cancelled():
+                        producer_error: object = repr(producer.exception())
+                    else:
+                        producer_error = "cancelled or still running"
+                    raise AssertionError(
+                        "SSE stream did not close within "
+                        f"{_STREAM_BUDGET_SECONDS:.0f}s (max_events=2); "
+                        f"producer done={producer.done()} error={producer_error!r}"
+                    ) from None
             await producer
 
             frames: list[tuple[str, dict]] = []
@@ -199,6 +228,6 @@ def test_browser_events_stream_enforces_instance_token_and_pushes_realtime_draft
             assert frames[2][1]["workspace_id"] == workspace_id
 
     try:
-        asyncio.run(_exercise())
+        asyncio.run(asyncio.wait_for(_exercise(), timeout=_STREAM_BUDGET_SECONDS * 3))
     finally:
         app.state.runtime.resource_service.close()
