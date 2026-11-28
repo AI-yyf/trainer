@@ -1004,6 +1004,87 @@ def extract_coaching_context(
     }
 
 
+#: How many project file names the per-turn context lists before it says "and N more".
+PROJECT_FILES_SHOWN_LIMIT = 60
+
+
+def _snapshot_entry_is_current_file(entry_path: str, current_path: str, root_uri: object) -> bool:
+    """Whether a snapshot entry (relative to the workspace root) is the open file.
+
+    The host sends the open file as an absolute path and the snapshot entries relative to the
+    workspace root (`root_uri`), so the entry is resolved against that root and compared exactly; a
+    bare suffix match would take `pkg/app.py` for `app.py`.
+    """
+    if not current_path or not entry_path:
+        return False
+    entry = entry_path.replace("\\", "/")
+    if entry == current_path:
+        return True
+    root = str(root_uri or "").strip()
+    for prefix in ("file://", "vscode-remote://"):
+        if root.startswith(prefix):
+            root = root[len(prefix):]
+            break
+    root = root.rstrip("/")
+    if not root:
+        return False
+    return f"{root}/{entry}" == current_path
+
+
+def _build_project_files_block(
+    coach_context: dict[str, Any] | None,
+    current_file: dict[str, object] | None = None,
+) -> str:
+    """Names, never contents, of the project files the host handed over for this turn.
+
+    The host sends the list on every turn; it used to reach only the `project_read` tool, so the
+    model could not know which files exist and every project question began with `list`, then a
+    read, then the answer. With the names in front of it a read is needed only for a file it
+    actually wants to see. The open file is marked as already in the prompt: the model kept reading
+    it again before answering (measured with a real model, 2026-11-28).
+    """
+    context = coach_context if isinstance(coach_context, dict) else {}
+    snapshot = context.get("workspace_file_snapshot")
+    if not isinstance(snapshot, dict):
+        return ""
+    files = snapshot.get("files")
+    if not isinstance(files, list):
+        return ""
+    current_path = str((current_file or {}).get("path") or "").strip().replace("\\", "/")
+    names: list[str] = []
+    total = 0
+    for item in files:
+        if not isinstance(item, dict):
+            continue
+        path = str(item.get("path") or "").strip()
+        if not path:
+            continue
+        total += 1
+        if len(names) >= PROJECT_FILES_SHOWN_LIMIT:
+            continue
+        in_prompt = _snapshot_entry_is_current_file(path, current_path, snapshot.get("root_uri"))
+        names.append(
+            f"{path} — its content (the lines shown above) and its diagnostics are already in your context; "
+            "read it again only for lines outside that window"
+            if in_prompt
+            else path
+        )
+    if not names:
+        return ""
+    more = (
+        f"\n- … and {total - len(names)} more (`project_read` with action `list` shows them all)"
+        if total > len(names)
+        else ""
+    )
+    return (
+        "Project files (names only; this list is already in front of you, so do not call `project_read` "
+        "with action `list` again — read a file only when you need its content and it is not already in "
+        "your context):\n"
+        + "\n".join(f"- {name}" for name in names)
+        + more
+    )
+
+
 def build_coaching_system_prompt(
     profile: UserProfile,
     response_language: str | None = None,
@@ -1587,6 +1668,10 @@ def build_coaching_messages(
                 file_context_parts.append("\nRelated snippets:\n" + "\n".join(related_snippets))
 
         runtime_context_blocks.append("".join(file_context_parts))
+
+    project_files_block = _build_project_files_block(coach_context, current_file)
+    if project_files_block:
+        runtime_context_blocks.append(project_files_block)
 
     runtime_bias_lines: list[str] = []
     if memory_scope == "session":
