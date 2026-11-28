@@ -229,6 +229,17 @@
         "library_exec on Windows",
         "leftover_* isolation: keep or plan the structural replacement"
       ]
+    },
+    "fifth_pass": {
+      "file_name": "stored next step / focus / task title no longer cut a file name: the 80-character cap was applied to the whole path before its last segment; an ASCII dot inside a word is not a clause end (test_a_file_name_is_never_cut.py, 15)",
+      "failed_turn": "agent lane no longer wraps its own failure reply around itself (summary shown three times on both routes); the plain lane's local scaffold stays in the learner's language, names files by name, and joins sentences with a sentence end (test_a_failed_turn_says_it_once.py, 3)",
+      "gates": "Backend pytest 2,828 passed (91 files); extension node:test 1,460 passed (161 files); Playwright 105 passed; installed-VSIX E2E 36/36 with a VSIX rebuilt from this tree; `npm run build` exit 0; pyright 0 errors over `server/app` and `server/tests`; ruff, `npm run check`, `verify:i18n`, `verify:copy-vocabulary`, `verify:credentials` (5,311 files, 0 findings) pass; real-sidecar experience matrix 12/12; `test:structural-journey` 18 PASS / 4 BLOCKED / 0 FAIL; `verify:local-latency` 5/5; `verify:ui-geometry` 360/360; `test:ui-a11y` 96/96.",
+      "owner_decisions_pending": [
+        "§10 sign-off (.trainer-convergence/evidence/real-model-story-2026-11-28.md)",
+        "§5 budgets: endpoint/model choice",
+        "library_exec on Windows",
+        "leftover_* isolation: keep or plan the structural replacement"
+      ]
     }
   }
 }

@@ -968,3 +968,48 @@ Backend pytest 2,810 passed (89 files); extension node:test 1,460 passed, 0 fail
 ### Open for the owner
 
 (1) **The §10 sign-off** — the document above. (2) **The two §5 budgets**: the product's own round trips are gone; what remains is the gateway's first event and the model's hidden reasoning, so the next lever is the endpoint or the model for the default pace (or accepting a truthful status line as the first visible content, which the contract's wording allows). (3) **`library_exec` on Windows** — fail-closed since the first pass; accept, or commission a Windows sandbox backend. (4) **The `leftover_*` isolation** — keep and plan the structural replacement as its own piece of work (my recommendation), or start it now. (5) Smaller: the stored next step still falls back to a template ("围绕 … 先在 … 里查看…", with a file name cut to five characters in one run) when a guided reply has no action of its own; the host status copy and its language; the gateway's cache misses.
+
+## 2026-11-28 (fifth pass) — a file name is one token, and a failed turn says it once
+
+The fourth pass left one smaller item that needed no owner's decision: the stored next step's template said "先在 `refunds.` 里查看" ("`refun`" in another run). It was not a cut to five characters. Reproducing it in-process, with no model, also showed what a learner reads when the provider is unreachable — worse than the next-step line, and on the path every misconfigured install goes through. Everything here is committed to `main`; nothing is pushed.
+
+### Four cuts through one file name
+
+One learner turn — "我在 refunds.py 里也碰到类似的超时重试问题，这次我想自己修，只给我一句提示就好。" — lost the name of its file in three stored places.
+
+- *The stored next step.* `_clean_request_anchor_candidate` caps a candidate at 80 characters, and it was applied to the open file's **whole path** before its last segment was taken. A workspace deeper than 80 characters loses the end of its file name: the probe's temporary folder made the path 82 characters long (`refunds.py` → `refunds.`), a longer folder name left `refun`. `_file_name_anchor` takes the last segment first and caps afterwards.
+- *The Chinese anchor next to it.* 「里也碰到类似的超时重试问」 was the rest of the learner's clause after the file name, cut at twelve characters. Within the limit a run now stands as written; past it, the phrase is what follows the clause's last structural particle (「超时重试问题」), and nothing when there is no such cut. The template's own wording lost a stray space before its comma.
+- *The stored focus.* 「当前聚焦点：我在 refunds」: the first clause of the message was split at the dot of `refunds.py`. `app/core/text_boundaries.py` now owns the rule — an ASCII `.`, `!` or `?` ends a clause only at the edge of a word — and both clause splitters use it. The second one titles a task from its first sentence, and titled one "Add retries to payments".
+- *A pronoun.* "我在 refunds.py 里…" opens with a pronoun and a preposition; without them the clause names the focus (`refunds.py 里也碰到类似的超时重试问题`). "我想真正搞懂幂等" keeps its pronoun: what follows one is the learner's own topic, and cutting it left 「想真正搞懂幂等」.
+
+Tests: `test_a_file_name_is_never_cut.py` (15).
+
+### A failed turn
+
+- **With the agent loop (the default lane), both turn routes**, an unreachable provider showed
+
+  ```
+  Trainer 当前卡在 provider path，所以这轮 coaching 还不能继续。
+
+  Trainer 目前无法通过 network 连到这个 provider。
+  详情：Trainer 当前卡在 provider path，所以这轮 coaching 还不能继续。 Trainer 目前无法通过 network 连到这个 provider。 详情：Trainer 目前无法通过 network 连到这个 provider。 下一步：先检查 network 路径或 proxy 设置，再重发...
+  下一步：先检查 network 路径或 proxy 设置，再重发这一轮。
+  ```
+
+  The agent path built the clean reply with its own summary as the "detail" line, stored that reply as the failure's detail, and the route then wrapped the reply around itself as its own "详情". The binding keeps only the category of a failure, never the provider's message, so the reply now carries no detail line and the failure record none.
+
+- **Without the agent loop** (a model without tools) the plain stream answers from the local scaffold under a failure banner. That is the tested contract (`test_api_error_stream_falls_back_to_local_coach_scaffold_in_chinese`) and it stays. What it showed a Chinese learner does not:
+
+  > 先把这个原理落成动作：Point at one line or branch in /var/folders/…/repo/app.py, explain how 'Anchor 当前聚焦：先把「app.py」这条主线稳住，等 provider 链路能完整保留原句后再继续。下一步：…' shows up there, and state what would break if that rule was ignored. Keep it tied to 当前聚焦：…. 你前面已经把这条线的一部分走通了：Trainer kept a reusable progress thread for app.py.。这一轮继续沿着可验证的节奏走。
+
+  The scaffold's material is English prompt text, and its language gate refused only text with no Chinese at all — an English prompt with a Chinese anchor inside went through. The gate now reads an English sentence by its short function words; a remembered win or weak spot in English is skipped for a Chinese learner instead of shown; the scaffold names a file by its name, not by the absolute path the host sends; the remembered focus loses its "当前聚焦：" label when quoted; two sentences of one paragraph are joined by a sentence end, not a space; and "下一步：…。"+"。" no longer reads "。。". The same turn now reads: banner, "我们先沿着这条线继续：先把「app.py」这条主线稳住，等 provider 链路恢复后再继续。下一步：…", the category summary, and one localized step.
+
+Tests: `test_a_failed_turn_says_it_once.py` (3; a closed port, both routes, both lanes).
+
+### Gates on the final tree
+
+Backend pytest 2,828 passed (91 files); extension node:test 1,460 passed (161 files); Playwright 105 passed; installed-VSIX E2E 36/36 with a VSIX rebuilt from this tree; `npm run build` exit 0; pyright 0 errors over `server/app` and `server/tests`; ruff, `npm run check`, `verify:i18n`, `verify:copy-vocabulary`, `verify:credentials` (5,311 files, 0 findings) pass; real-sidecar experience matrix 12/12; `test:structural-journey` 18 PASS / 4 BLOCKED / 0 FAIL; `verify:local-latency` 5/5; `verify:ui-geometry` 360/360; `test:ui-a11y` 96/96.
+
+### Open for the owner
+
+(1) **The §10 sign-off** — `.trainer-convergence/evidence/real-model-story-2026-11-28.md`, unchanged by this pass. (2) **The two §5 budgets**: the product's own round trips are gone; what remains is the gateway's first event and the model's hidden reasoning, so the next lever is the endpoint or the model for the default pace (or accepting a truthful status line as the first visible content, which the contract's wording allows). (3) **`library_exec` on Windows** — fail-closed since the first pass; accept, or commission a Windows sandbox backend. (4) **The `leftover_*` isolation** — keep and plan the structural replacement as its own piece of work (my recommendation), or start it now. (5) Smaller: the plain lane's local scaffold is an old subsystem, and its scenario defaults still carry internal vocabulary inside Chinese sentences ("把当前原理钉在一处 live code boundary 上"); the host status copy and its language; the gateway's cache misses.
