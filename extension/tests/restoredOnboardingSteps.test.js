@@ -1,0 +1,121 @@
+// Restored behavioral regression test. Original file: extension/tests/onboardingSteps.test.js at df0a3e2a^
+// (removed in df0a3e2a; restored against the current compiled extension/dist build).
+//
+// Coverage: Onboarding step derivation: workspace root, trust and model readiness.
+//
+// Restoration: whole - all 5 original test definitions, code and assertions unchanged.
+// Target: compiled shared modules (extension/dist/shared/src).
+
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+
+const onboardingModulePath = path.resolve(
+  __dirname,
+  '..',
+  'dist',
+  'shared',
+  'src',
+  'onboarding.js',
+);
+
+const {
+  deriveOnboardingSteps,
+  isOnboardingStepDone,
+  resolveEffectiveTrustState,
+  ONBOARDING_STEP_ORDER,
+} = require(
+  onboardingModulePath,
+);
+
+test('onboarding walks workspace root → trust → model and completes only when all done', () => {
+  assert.deepEqual(ONBOARDING_STEP_ORDER, ['workspace_root', 'trust_window', 'connect_model']);
+
+  const coldStart = deriveOnboardingSteps({});
+  assert.equal(coldStart.complete, false);
+  assert.equal(coldStart.activeStepId, 'workspace_root');
+  assert.deepEqual(
+    coldStart.steps.map((step) => [step.id, step.status]),
+    [
+      ['workspace_root', 'active'],
+      ['trust_window', 'pending'],
+      ['connect_model', 'pending'],
+    ],
+  );
+
+  const afterRoot = deriveOnboardingSteps({ workspaceAdmissionStatus: 'project-found' });
+  assert.equal(afterRoot.activeStepId, 'trust_window');
+
+  const afterTrust = deriveOnboardingSteps({
+    workspaceAdmissionStatus: 'managed',
+    workspaceTrustState: 'trusted',
+  });
+  assert.equal(afterTrust.activeStepId, 'connect_model');
+
+  const complete = deriveOnboardingSteps({
+    workspaceAdmissionStatus: 'managed',
+    workspaceTrustState: 'trusted',
+    providerConfigured: true,
+    providerApiKeyConfigured: true,
+    providerSendBlocked: false,
+  });
+  assert.equal(complete.complete, true);
+  assert.equal(complete.activeStepId, undefined);
+  assert.ok(complete.steps.every((step) => step.status === 'done'));
+});
+
+test('workspace root step treats every non-missing admission status as done', () => {
+  assert.equal(isOnboardingStepDone('workspace_root', {}), false);
+  assert.equal(isOnboardingStepDone('workspace_root', { workspaceAdmissionStatus: 'root-missing' }), false);
+  for (const status of ['project-found', 'managed', 'browse', 'ignored']) {
+    assert.equal(isOnboardingStepDone('workspace_root', { workspaceAdmissionStatus: status }), true);
+  }
+});
+
+test('trust step only accepts trusted or remote states', () => {
+  assert.equal(isOnboardingStepDone('trust_window', {}), false);
+  assert.equal(isOnboardingStepDone('trust_window', { workspaceTrustState: 'unknown' }), false);
+  assert.equal(isOnboardingStepDone('trust_window', { workspaceTrustState: 'untrusted' }), false);
+  assert.equal(isOnboardingStepDone('trust_window', { workspaceTrustState: 'trusted' }), true);
+  assert.equal(isOnboardingStepDone('trust_window', { workspaceTrustState: 'remote' }), true);
+});
+
+test('model step requires a configured, keyed, unblocked provider', () => {
+  assert.equal(isOnboardingStepDone('connect_model', {}), false);
+  assert.equal(
+    isOnboardingStepDone('connect_model', { providerConfigured: true }),
+    false,
+    'configured without key must stay pending',
+  );
+  assert.equal(
+    isOnboardingStepDone('connect_model', {
+      providerConfigured: true,
+      providerApiKeyConfigured: true,
+      providerSendBlocked: true,
+    }),
+    false,
+    'blocked send must stay pending',
+  );
+  assert.equal(
+    isOnboardingStepDone('connect_model', {
+      providerConfigured: true,
+      providerApiKeyConfigured: true,
+      providerSendBlocked: false,
+    }),
+    true,
+  );
+});
+
+test('effective trust falls back to the window verdict when capabilities are absent', () => {
+  // Genuine first run: no capability summary yet, but the window is trusted —
+  // the learner must not be asked to trust the window again.
+  assert.equal(resolveEffectiveTrustState('unknown', true), 'trusted');
+  assert.equal(resolveEffectiveTrustState(undefined, true), 'trusted');
+  assert.equal(resolveEffectiveTrustState(undefined, false), 'unknown');
+  // An explicit sidecar verdict always wins.
+  assert.equal(resolveEffectiveTrustState('untrusted', true), 'untrusted');
+  assert.equal(resolveEffectiveTrustState('trusted', false), 'trusted');
+  assert.equal(resolveEffectiveTrustState('remote', false), 'remote');
+});

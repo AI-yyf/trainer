@@ -1,0 +1,144 @@
+// Restored behavioral regression test. Original file: extension/tests/remoteCompanionBridge.test.js at df0a3e2a^
+// (removed in df0a3e2a; restored against the current compiled extension/dist build).
+//
+// Coverage: Remote companion bridge: file bytes, search and hashes over protocol v2, authority and path guards, structured verification.
+//
+// Restoration: whole - all 5 original test definitions, code and assertions unchanged.
+// Target: remote-companion and extension workspace gateway TypeScript bundled in memory with esbuild; local child processes.
+
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const Module = require('node:module');
+const { pathToFileURL, fileURLToPath } = require('node:url');
+const { buildSync } = require('../webview/node_modules/esbuild');
+
+const root = path.resolve(__dirname, '../..');
+const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-companion-bridge-'));
+fs.writeFileSync(path.join(fixture, 'notes.md'), 'Keep the quiet fix in this workspace.\n');
+const outsideFixture = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-companion-outside-'));
+fs.writeFileSync(path.join(outsideFixture, 'sentinel.md'), 'Owned outside sentinel; never expose these bytes.\n');
+fs.mkdirSync(path.join(fixture, 'inner'));
+fs.writeFileSync(path.join(fixture, 'inner', 'inside.md'), 'Allowed inside alias.\n');
+const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+fs.symlinkSync(outsideFixture, path.join(fixture, 'escape'), linkType);
+fs.symlinkSync(path.join(fixture, 'inner'), path.join(fixture, 'inside-alias'), linkType);
+fs.symlinkSync(fixture, path.join(outsideFixture, 'root-alias'), linkType);
+// vscode-remote URIs always carry a slash-form host path; on Windows a raw
+// fixture (C:\Users\...) would place ':' and '\' inside the URI authority,
+// which throws Invalid URL. '/C:/Users/...' is the shape real vscode-remote
+// URIs use; on POSIX this is the fixture path unchanged.
+const hostPath = `/${fixture.split(path.sep).filter(Boolean).join('/')}`;
+const hostRoot = `vscode-remote://ssh-remote+bridge-host${hostPath}`;
+const workspaceRoot = pathToFileURL(fixture).href;
+
+function toFsPath(parsed) {
+  // Real vscode maps file: URIs to native OS paths (file:///C:/x → C:\x);
+  // other schemes keep a decoded-pathname compatibility value.
+  if (parsed.protocol === 'file:') {
+    return fileURLToPath(parsed.href);
+  }
+  return decodeURIComponent(parsed.pathname);
+}
+
+function uri(value) {
+  const parsed = new URL(value);
+  return { scheme: parsed.protocol.slice(0, -1), authority: decodeURIComponent(parsed.host), path: decodeURIComponent(parsed.pathname),
+    fsPath: toFsPath(parsed), toString: () => parsed.href };
+}
+const Uri = { parse: uri, file: value => uri(pathToFileURL(value).href), joinPath: (base, relative) => uri(`${base.scheme}://${base.authority}${path.posix.join(base.path, relative)}`) };
+function load(source, vscode) {
+  const filename = path.join(root, source);
+  const { outputFiles } = buildSync({ entryPoints: [filename], bundle: true, platform: 'node', format: 'cjs', write: false, external: ['vscode'] });
+  const mod = new Module(filename, module);
+  mod.filename = filename;
+  mod.paths = Module._nodeModulePaths(path.dirname(filename));
+  const originalRequire = mod.require.bind(mod);
+  mod.require = request => request === 'vscode' ? vscode : originalRequire(request);
+  mod._compile(outputFiles[0].text, filename);
+  return mod.exports;
+}
+const handlers = new Map();
+const companionVscode = {
+  Uri, env: { remoteName: 'ssh-remote' }, languages: { getDiagnostics: () => [] },
+  commands: { registerCommand: (name, handler) => { handlers.set(name, handler); return { dispose() {} }; } },
+  workspace: { workspaceFolders: [{ uri: uri(workspaceRoot) }],
+    fs: { readFile: value => fs.promises.readFile(value.fsPath) },
+    findFiles: async () => ['notes.md', 'escape/sentinel.md'].map(relative => uri(pathToFileURL(path.join(fixture, relative)).href)) },
+};
+const companion = load('remote-extension/src/extension.ts', companionVscode);
+companion.activate({ subscriptions: [] });
+const calls = [];
+const { RemoteWorkspaceGateway } = load('extension/src/workspace/remoteWorkspaceGateway.ts', {
+  Uri, env: { remoteName: 'ssh-remote' }, workspace: { workspaceFolders: [{ uri: uri(hostRoot) }] },
+  commands: { executeCommand: async (name, payload) => { calls.push({ name, payload }); return handlers.get(name)(payload); } },
+});
+const gateway = new RemoteWorkspaceGateway('ssh-remote');
+
+test('UI and workspace hosts exchange real file bytes, search results and hashes through protocol v2', async () => {
+  const file = Uri.joinPath(uri(hostRoot), 'notes.md');
+  assert.equal(await gateway.readText(file), 'Keep the quiet fix in this workspace.\n');
+  assert.match(await gateway.hashArtifact(file), /^[a-f0-9]{64}$/);
+  const matches = await gateway.searchText({ text: 'quiet fix', pattern: '**/*.md' });
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].uri, file.toString());
+  assert.equal((await gateway.findFiles({ pattern: '**/*.md' }))[0].toString(), file.toString());
+  // VS Code can canonicalize a Windows drive letter to lowercase. Preserve
+  // every directory/file segment while comparing that OS-equivalent drive.
+  const normalizeNativeFile = value => path.normalize(value).replace(/^[A-Z]:/, drive => drive.toLowerCase());
+  const requestedFiles = calls.filter(call => call.payload?.uri)
+    .map(call => normalizeNativeFile(fileURLToPath(call.payload.uri)));
+  assert.ok(requestedFiles.includes(normalizeNativeFile(path.join(fixture, 'notes.md'))),
+    'the bridge must address the exact native fixture file, regardless of URI drive serialization');
+});
+
+test('foreign authority and outside paths are rejected before a file request crosses the bridge', async () => {
+  const before = calls.filter(call => call.name === 'trainer.remote.request').length;
+  await assert.rejects(gateway.readFile(uri(`vscode-remote://ssh-remote+other-host${hostPath}/notes.md`)), /different workspace authority/);
+  await assert.rejects(gateway.readFile(uri(`vscode-remote://ssh-remote+bridge-host${hostPath}-outside/outside.md`)), /outside the active workspace/);
+  assert.equal(calls.filter(call => call.name === 'trainer.remote.request').length, before);
+});
+
+test('canonical scope blocks symlink escapes for reads, hashes, search and verification cwd', async () => {
+  const escaped = Uri.joinPath(uri(hostRoot), 'escape/sentinel.md');
+  await assert.rejects(gateway.readFile(escaped), /canonical active workspace/);
+  await assert.rejects(gateway.hashArtifact(escaped), /canonical active workspace/);
+  assert.deepEqual(await gateway.searchText({ text: 'outside sentinel', pattern: '**/*.md' }), []);
+  assert.equal((await gateway.findFiles({ pattern: '**/*.md' })).some(file => file.path.includes('escape')), false);
+  await assert.rejects(gateway.diagnostics(escaped), /canonical active workspace/);
+  await assert.rejects(gateway.verifyStart({ executable: process.execPath, args: ['-e', 'process.exit(0)'], cwd: Uri.joinPath(uri(hostRoot), 'escape').toString() }), /canonical active workspace/);
+});
+
+test('legitimate inside symlinks and a canonical root alias preserve workspace access', async () => {
+  const inside = Uri.joinPath(uri(hostRoot), 'inside-alias/inside.md');
+  assert.equal(await gateway.readText(inside), 'Allowed inside alias.\n');
+  const originalRoot = companionVscode.workspace.workspaceFolders[0].uri;
+  companionVscode.workspace.workspaceFolders[0].uri = uri(pathToFileURL(path.join(outsideFixture, 'root-alias')).href);
+  try { assert.equal(await gateway.readText(inside), 'Allowed inside alias.\n'); }
+  finally { companionVscode.workspace.workspaceFolders[0].uri = originalRoot; }
+});
+
+test('structured verification launches a real process and preserves pass, fail and cancellation facts', async () => {
+  const spec = { executable: process.execPath, args: ['-e', 'process.stdout.write(process.argv[1]);', 'literal space $value'], cwd: uri(hostRoot).toString() };
+  const passed = await gateway.runVerification(spec, { pollIntervalMs: 10 });
+  assert.equal(passed.state, 'completed'); assert.equal(passed.result, 'passed'); assert.equal(passed.exit_code, 0);
+  assert.equal(passed.stdout, 'literal space $value');
+  const failed = await gateway.runVerification({ ...spec, args: ['-e', 'process.exit(7)'] }, { pollIntervalMs: 10 });
+  assert.equal(failed.state, 'completed'); assert.equal(failed.result, 'failed'); assert.equal(failed.exit_code, 7);
+  const cancelled = await gateway.runVerification({ ...spec, args: ['-e', 'setTimeout(()=>{},30000)'] }, { signal: { aborted: true } });
+  assert.equal(cancelled.state, 'cancelled'); assert.equal(cancelled.result, undefined);
+  assert.equal(cancelled.environment.os, process.platform);
+});
+
+test.after(async () => {
+  companion.deactivate();
+  // Windows taskkill completes asynchronously; a cancelled child's cwd can
+  // remain locked until its process tree exits. Cleanup stays bounded and
+  // still fails if the owned fixture cannot be removed.
+  await fs.promises.rm(fixture, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+  await fs.promises.rm(outsideFixture, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+});

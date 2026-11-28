@@ -1,0 +1,391 @@
+// Restored behavioral regression test. Original file: extension/tests/htmlSanitizerXssFixture.test.js at df0a3e2a^
+// (removed in df0a3e2a; restored against the current compiled extension/dist build).
+//
+// Coverage: undefined
+//
+// Restoration: partial - 4 of 6 original test definitions kept, their code and assertions unchanged.
+// Omitted original tests:
+//   - "coach DiffRenderer escapes or sanitizes before dangerouslySetInnerHTML"
+//       fails at HEAD: ENOENT: no such file or directory, open
+//       'extension/webview/src/components/coach/parts/DiffRenderer.tsx
+//   - "model HTML renderers sanitize; trusted Shiki/Mermaid keep library styles"
+//       fails at HEAD: ENOENT: no such file or directory, open
+//       'extension/webview/src/components/parts/CodeRenderer.tsx
+// Target: webview TypeScript transpiled in memory with typescript.transpileModule.
+
+'use strict';
+
+const fs = require('node:fs');
+const Module = require('node:module');
+const path = require('node:path');
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const webviewNodeModules = path.resolve(__dirname, '..', 'webview', 'node_modules');
+if (!process.env.NODE_PATH?.split(path.delimiter).includes(webviewNodeModules)) {
+  process.env.NODE_PATH = process.env.NODE_PATH
+    ? `${webviewNodeModules}${path.delimiter}${process.env.NODE_PATH}`
+    : webviewNodeModules;
+  Module._initPaths();
+}
+
+const typescript = require(path.join(webviewNodeModules, 'typescript'));
+const parse5 = require(path.join(webviewNodeModules, 'parse5'));
+
+for (const extension of ['.ts', '.tsx']) {
+  if (!require.extensions[extension]) {
+    require.extensions[extension] = (module, filename) => {
+      const source = fs.readFileSync(filename, 'utf8');
+      const { outputText } = typescript.transpileModule(source, {
+        compilerOptions: {
+          module: typescript.ModuleKind.CommonJS,
+          target: typescript.ScriptTarget.ES2020,
+          jsx: typescript.JsxEmit.ReactJSX,
+          esModuleInterop: true,
+        },
+        fileName: filename,
+      });
+      module._compile(outputText, filename);
+    };
+  }
+}
+
+const htmlSanitizerPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'lib',
+  'htmlSanitizer.ts',
+);
+
+function installParse5Document() {
+  const previous = globalThis.document;
+
+  function wrapText(value, ownerDocument, parent) {
+    const raw = { nodeName: '#text', value: String(value ?? ''), parentNode: null, attrs: [], childNodes: [] };
+    return {
+      nodeType: 3,
+      nodeName: '#text',
+      ownerDocument,
+      parentNode: parent,
+      get textContent() {
+        return raw.value;
+      },
+      set textContent(value) {
+        raw.value = String(value ?? '');
+      },
+      _raw: raw,
+    };
+  }
+
+  /** Members the DOM gives every element; the wrapped objects below are built per node. */
+  function withTextAndAppend(element) {
+    Object.defineProperty(element, 'append', {
+      value(...nodes) {
+        for (const node of nodes) {
+          element.appendChild(node);
+        }
+      },
+    });
+    Object.defineProperty(element, 'textContent', {
+      get() {
+        return element.childNodes.map((child) => child.textContent).join('');
+      },
+      set(value) {
+        for (const child of element.childNodes) {
+          child.parentNode = null;
+        }
+        element.childNodes = [];
+        if (String(value ?? '') !== '') {
+          element.childNodes.push(wrapText(value, element.ownerDocument, element));
+        }
+      },
+    });
+    return element;
+  }
+
+  function wrapNodes(parse5Nodes, ownerDocument, parent) {
+    const out = [];
+    for (const raw of parse5Nodes) {
+      if (raw.nodeName === '#text') {
+        out.push(wrapText(raw.value, ownerDocument, parent));
+        continue;
+      }
+      if (raw.nodeName === '#comment') {
+        continue;
+      }
+      out.push(wrapElement(raw, ownerDocument, parent));
+    }
+    return out;
+  }
+
+  function wrapElement(raw, ownerDocument, parent) {
+    const attrs = (raw.attrs || []).map((attr) => ({
+      name: attr.name,
+      value: attr.value,
+    }));
+
+    const element = {
+      nodeType: 1,
+      nodeName: String(raw.nodeName).toUpperCase(),
+      tagName: String(raw.nodeName).toUpperCase(),
+      ownerDocument,
+      parentNode: parent,
+      attributes: attrs,
+      childNodes: [],
+      get children() {
+        return this.childNodes.filter((child) => child.nodeType === 1);
+      },
+      get firstChild() {
+        return this.childNodes[0] ?? null;
+      },
+      getAttribute(name) {
+        const found = attrs.find((attr) => attr.name.toLowerCase() === String(name).toLowerCase());
+        return found ? found.value : null;
+      },
+      setAttribute(name, value) {
+        const lower = String(name).toLowerCase();
+        const existing = attrs.find((attr) => attr.name.toLowerCase() === lower);
+        if (existing) {
+          existing.name = name;
+          existing.value = String(value);
+          return;
+        }
+        attrs.push({ name, value: String(value) });
+      },
+      removeAttribute(name) {
+        const lower = String(name).toLowerCase();
+        const index = attrs.findIndex((attr) => attr.name.toLowerCase() === lower);
+        if (index >= 0) {
+          attrs.splice(index, 1);
+        }
+      },
+      appendChild(child) {
+        if (child.parentNode && child.parentNode !== this) {
+          child.parentNode.childNodes = child.parentNode.childNodes.filter((node) => node !== child);
+        }
+        child.parentNode = this;
+        this.childNodes.push(child);
+        return child;
+      },
+      remove() {
+        if (!this.parentNode) {
+          return;
+        }
+        this.parentNode.childNodes = this.parentNode.childNodes.filter((node) => node !== this);
+        this.parentNode = null;
+      },
+      replaceWith(...nodes) {
+        if (!this.parentNode) {
+          return;
+        }
+        const parentChildNodes = this.parentNode.childNodes;
+        const index = parentChildNodes.indexOf(this);
+        if (index < 0) {
+          return;
+        }
+        const replacements = [];
+        for (const node of nodes) {
+          if (node.nodeName === '#document-fragment') {
+            replacements.push(...node.childNodes);
+            for (const child of node.childNodes) {
+              child.parentNode = this.parentNode;
+            }
+            node.childNodes = [];
+          } else {
+            node.parentNode = this.parentNode;
+            replacements.push(node);
+          }
+        }
+        parentChildNodes.splice(index, 1, ...replacements);
+        this.parentNode = null;
+      },
+      _raw: raw,
+    };
+
+    element.childNodes = wrapNodes(raw.childNodes || [], ownerDocument, element);
+    return withTextAndAppend(element);
+  }
+
+  function serializeNode(node) {
+    if (node.nodeType === 3) {
+      return node.textContent;
+    }
+    if (node.nodeName === '#document-fragment') {
+      return node.childNodes.map(serializeNode).join('');
+    }
+    const tag = node.tagName.toLowerCase();
+    const attrText = node.attributes
+      .map((attr) => ` ${attr.name}="${String(attr.value).replace(/"/g, '&quot;')}"`)
+      .join('');
+    const voidTags = new Set(['br', 'hr', 'img', 'meta', 'link', 'base']);
+    if (voidTags.has(tag)) {
+      return `<${tag}${attrText}>`;
+    }
+    return `<${tag}${attrText}>${node.childNodes.map(serializeNode).join('')}</${tag}>`;
+  }
+
+  const documentShim = {
+    createDocumentFragment() {
+      return {
+        nodeName: '#document-fragment',
+        nodeType: 11,
+        childNodes: [],
+        appendChild(child) {
+          if (child.parentNode) {
+            child.parentNode.childNodes = child.parentNode.childNodes.filter((node) => node !== child);
+          }
+          child.parentNode = this;
+          this.childNodes.push(child);
+          return child;
+        },
+      };
+    },
+    createElement(tagName) {
+      // A plain element the sanitizer builds itself (the remote-image
+      // placeholder): it serializes like any parsed node.
+      if (String(tagName).toLowerCase() !== 'template') {
+        return wrapElement(
+          { nodeName: String(tagName), attrs: [], childNodes: [] },
+          documentShim,
+          null,
+        );
+      }
+      let contentRoot = {
+        nodeName: '#document-fragment',
+        nodeType: 11,
+        childNodes: [],
+        get children() {
+          return this.childNodes.filter((child) => child.nodeType === 1);
+        },
+      };
+      return {
+        content: contentRoot,
+        set innerHTML(value) {
+          const fragment = parse5.parseFragment(String(value ?? ''));
+          contentRoot.childNodes = wrapNodes(fragment.childNodes || [], documentShim, contentRoot);
+        },
+        get innerHTML() {
+          return contentRoot.childNodes.map(serializeNode).join('');
+        },
+      };
+    },
+  };
+
+  globalThis.document = documentShim;
+  return () => {
+    if (previous === undefined) {
+      delete globalThis.document;
+    } else {
+      globalThis.document = previous;
+    }
+  };
+}
+
+test('sanitizePreviewHtml fail-closed empty without document', () => {
+  const hadDocument = Object.prototype.hasOwnProperty.call(globalThis, 'document');
+  const previous = globalThis.document;
+  delete globalThis.document;
+  try {
+    // Fresh require so typeof document is evaluated in this host.
+    delete require.cache[require.resolve(htmlSanitizerPath)];
+    const { sanitizePreviewHtml } = require(htmlSanitizerPath);
+    assert.equal(
+      sanitizePreviewHtml('<p onerror="x"><script>alert(1)</script>ok</p>'),
+      '',
+    );
+  } finally {
+    if (hadDocument) {
+      globalThis.document = previous;
+    } else {
+      delete globalThis.document;
+    }
+    delete require.cache[require.resolve(htmlSanitizerPath)];
+  }
+});
+
+test('sanitizePreviewHtml strips script onerror javascript fixture', () => {
+  const restore = installParse5Document();
+  try {
+    delete require.cache[require.resolve(htmlSanitizerPath)];
+    const { sanitizePreviewHtml } = require(htmlSanitizerPath);
+    const fixture =
+      '<section><p onerror="alert(1)">safe</p>' +
+      '<script>alert(1)</script>' +
+      '<img src="x" onerror="alert(1)">' +
+      '<a href="javascript:alert(1)">click</a>' +
+      '<div onclick="alert(1)">x</div></section>';
+    const out = sanitizePreviewHtml(fixture);
+    assert.doesNotMatch(out, /<script\b/i);
+    assert.doesNotMatch(out, /\sonerror\s*=/i);
+    assert.doesNotMatch(out, /\sonclick\s*=/i);
+    assert.doesNotMatch(out, /javascript:/i);
+    assert.match(out, /safe/);
+  } finally {
+    restore();
+    delete require.cache[require.resolve(htmlSanitizerPath)];
+  }
+});
+
+test('sanitizePreviewHtml strips external svg paint-server references', () => {
+  const restore = installParse5Document();
+  try {
+    delete require.cache[require.resolve(htmlSanitizerPath)];
+    const { sanitizePreviewHtml } = require(htmlSanitizerPath);
+    // SVG presentation attributes are fetched without a click. A URL that is
+    // not a same-document fragment must not survive sanitisation.
+    const out = sanitizePreviewHtml(
+      '<svg><rect fill="url(https://attacker.example/p.svg#g)" ' +
+        'stroke="url(//evil.example/x#a)" ' +
+        'mask="url(http://127.0.0.1:9/m#m)" ' +
+        'href="https://evil.example/use.svg#u" /></svg>',
+    );
+    assert.doesNotMatch(out, /url\s*\(\s*(?:https?:|\/\/)/i);
+    assert.doesNotMatch(out, /href\s*=\s*["']https?:/i);
+
+    // A same-document fragment reference is the legitimate diagram form.
+    const local = sanitizePreviewHtml('<svg><rect fill="url(#grad)" /></svg>');
+    assert.match(local, /url\(#grad\)/);
+    const geometry = sanitizePreviewHtml(
+      '<svg><g transform="translate(10 20) rotate(45)"><rect /></g></svg>',
+    );
+    assert.match(geometry, /translate\(10 20\) rotate\(45\)/);
+
+    // CSS escapes and comments can hide a function name from a plain `url(`
+    // scan; they fail closed.
+    const escaped = sanitizePreviewHtml(
+      '<svg><rect fill="u\\72l(https://attacker.example/x#g)" ' +
+        'filter="url/**/(https://attacker.example/f#g)" /></svg>',
+    );
+    assert.doesNotMatch(escaped, /url|attacker\.example/i);
+  } finally {
+    restore();
+    delete require.cache[require.resolve(htmlSanitizerPath)];
+  }
+});
+
+
+test('docx-unrelated XSS-shaped fixture: assigned innerHTML must be sanitized output', () => {
+  const restore = installParse5Document();
+  try {
+    delete require.cache[require.resolve(htmlSanitizerPath)];
+    const { sanitizePreviewHtml } = require(htmlSanitizerPath);
+    // Shape-only fixture (not an exploit PoC). Simulates post-renderAsync staging HTML.
+    const stagingHtml =
+      '<div class="docx"><p onerror="x">body</p><script>x</script>' +
+      '<img src="https://example.com/a.png" onerror="x"></div>';
+    const sanitized = sanitizePreviewHtml(stagingHtml);
+    assert.doesNotMatch(sanitized, /<script\b/i);
+    assert.doesNotMatch(sanitized, /\sonerror\s*=/i);
+    assert.match(sanitized, /body/);
+    // DocxPreviewContent assigns only sanitized output to the visible container.
+    const docxContainer = { innerHTML: '' };
+    docxContainer.innerHTML = sanitized;
+    assert.equal(docxContainer.innerHTML, sanitized);
+    assert.doesNotMatch(docxContainer.innerHTML, /<script\b/i);
+  } finally {
+    restore();
+    delete require.cache[require.resolve(htmlSanitizerPath)];
+  }
+});
