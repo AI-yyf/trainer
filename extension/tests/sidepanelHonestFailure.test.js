@@ -343,7 +343,8 @@ test('every catalog command gets a reply, and an unsupported one is an explicit 
     unsupported += 1;
     assert.equal(reply.type, 'operation/status', `${commandId} must answer with a status the UI handles`);
     assert.equal(reply.payload.tone, 'error', `${commandId} is not implemented here and must not look like it ran`);
-    assert.ok(reply.payload.message.includes(commandId), `${commandId}: the status names the command`);
+    assert.match(reply.payload.message, /VS Code/i, `${commandId}: the status guides the learner back to VS Code`);
+    assert.ok(!reply.payload.message.includes(commandId), `${commandId}: internal command ids must not leak to learners`);
   }
 
   assert.ok(
@@ -391,7 +392,8 @@ test('an action with no side panel handler fails out loud while receipts and dia
     const reply = await replyTo(harness, { type, payload: {} }, type);
     assert.equal(reply.type, 'operation/status', `${type} must answer with a status the UI handles`);
     assert.equal(reply.payload.tone, 'error', `${type} has no side panel handler`);
-    assert.ok(reply.payload.message.includes(type), `${type}: the status names the action`);
+    assert.match(reply.payload.message, /VS Code/i, `${type}: the status guides the learner back to VS Code`);
+    assert.ok(!reply.payload.message.includes(type), `${type}: internal action types must not leak to learners`);
   }
 
   // Posted without waiting for anything: a reply here would be noise, and for
@@ -492,4 +494,38 @@ test('a successful resource search still publishes its results and a success sta
   const patch = harness.events.find((event) => event.message && event.message.type === 'state/patch');
   assert.ok(patch, 'the results are published as a state patch');
   assert.deepEqual(patch.message.payload.resourceSearch.hits, [hit]);
+});
+
+test('zh-CN side panel emits localized VS Code guidance without leaking internal ids', async () => {
+  const { createChromeSidePanelTransport } = await loadOnce('src/lib/chromeSidePanelTransport.ts');
+  const { trainerCommands } = await loadOnce('../../shared/src/commands.ts');
+  const stored = { ...AUTH };
+  const transport = createChromeSidePanelTransport({
+    initialPersistedState: { composerLanguage: 'zh-CN' },
+    platform: {
+      storageGet: async (defaults) => ({ ...defaults, ...stored }),
+      storageSet: async (items) => { Object.assign(stored, items); },
+      sendRuntimeMessage: async () => ({}),
+      queryActiveTab: async () => undefined,
+      fetchFn: async () => jsonResponse(200, {}),
+    },
+  });
+  const bootstrap = nextMessage(transport, (m) => m.type === 'bootstrap', 'bootstrap');
+  transport.postMessage({ type: 'request/bootstrap' });
+  await bootstrap;
+
+  const trainingAck = nextMessage(transport, (m) => m.type === 'training/persistenceAck', 'training ack');
+  executeCommand(transport, trainerCommands.evaluateCurrentFile, { __trainerTrainingPersistenceId: 'zh-1' });
+  const ack = await trainingAck;
+  assert.equal(ack.payload.ok, false);
+  assert.match(ack.payload.message, /VS Code/);
+  assert.match(ack.payload.message, /未保存/);
+  assert.ok(!ack.payload.message.includes(trainerCommands.evaluateCurrentFile));
+
+  const statusPromise = nextMessage(transport, (m) => m.type === 'operation/status', 'unsupported status');
+  transport.postMessage({ type: 'plan/generate', payload: {} });
+  const status = await statusPromise;
+  assert.equal(status.payload.tone, 'error');
+  assert.match(status.payload.message, /VS Code/);
+  assert.ok(!status.payload.message.includes('plan/generate'));
 });

@@ -27,17 +27,7 @@ const WEBVIEW_STATE_STORAGE_KEY = "trainer:sidepanel:webviewState";
 const SESSION_STORAGE_KEY = "trainer.sidepanel.session";
 const HOST_DEEP_LINK_BASE = "vscode://local.trainer-extension/";
 
-/**
- * Failure copy for a training/evidence command that has no browser lane.
- * Nothing was persisted, so the acknowledgement must say so: the webview
- * resolves a `training/persistenceAck` with `ok: true` straight into the
- * learner's next step, which would show progress that no server state backs
- * (product-contract §6 "evidence must be real", §9 "no fake completion").
- * A plain string like the "Not connected" failure, because the webview
- * surfaces a persistence rejection's message to the learner.
- */
-const UNSUPPORTED_TRAINING_COMMAND_MESSAGE =
-  "Not available in the browser side panel; nothing was saved.";
+
 
 /**
  * Action types the side panel leaves unanswered on purpose. Each one is a
@@ -154,9 +144,7 @@ function isTrainingPersistenceCommand(commandId: string, rawPayload: Record<stri
   );
 }
 
-function unsupportedCommandMessage(commandId: string): string {
-  return `Command is not available in the browser side panel: ${commandId}`;
-}
+
 
 async function storageGet(defaults: Record<string, unknown>): Promise<Record<string, unknown>> {
   const storage = getChromeApi()?.storage?.local;
@@ -237,41 +225,86 @@ async function sendRuntimeMessage(message: Record<string, unknown>): Promise<Rec
   });
 }
 
-const SIDEPANEL_BRIDGE_COPY: Record<
-  ComposerLanguage,
-  { connectInVsCode: string; openedSettingsInVsCode: string }
-> = {
+interface SidePanelBridgeCopy {
+  connectInVsCode: string;
+  openedSettingsInVsCode: string;
+  notConnected: string;
+  unsupportedTrainingInBrowser: string;
+  unsupportedActionInBrowser: string;
+}
+
+const SIDEPANEL_BRIDGE_COPY: Record<ComposerLanguage, SidePanelBridgeCopy> = {
   "zh-CN": {
     connectInVsCode: "请先在 VS Code 中打开 Trainer 完成连接。",
-    openedSettingsInVsCode: "已在 VS Code 中打开 Trainer 设置以管理模型与工作区连接。",
+    openedSettingsInVsCode: "已在 VS Code 中打开 Trainer 设置以管理模型连接与工作区。",
+    notConnected: "尚未连接到 VS Code，请先在 VS Code 中打开 Trainer。",
+    unsupportedTrainingInBrowser:
+      "此练习操作需要在 VS Code 中完成并验证结果，当前未保存。请切回 VS Code 继续。",
+    unsupportedActionInBrowser:
+      "此操作需要在 VS Code 中完成，请切回 VS Code 继续。",
   },
   "en-US": {
     connectInVsCode: "Open Trainer in VS Code first to connect this workspace.",
     openedSettingsInVsCode: "Opened Trainer Settings in VS Code to manage model and workspace connection.",
+    notConnected: "Not connected to VS Code. Open Trainer in VS Code first.",
+    unsupportedTrainingInBrowser:
+      "This practice step must be completed and verified in VS Code; nothing was saved. Continue in VS Code.",
+    unsupportedActionInBrowser:
+      "This action is only available in VS Code. Open Trainer in VS Code to continue.",
   },
   "es-ES": {
     connectInVsCode: "Abre primero Trainer en VS Code para conectar este espacio de trabajo.",
     openedSettingsInVsCode: "Se abrió Ajustes de Trainer en VS Code para gestionar el modelo y el espacio de trabajo.",
+    notConnected: "Sin conexión con VS Code. Abre primero Trainer en VS Code.",
+    unsupportedTrainingInBrowser:
+      "Este paso de práctica debe completarse y verificarse en VS Code; no se guardó nada. Continúa en VS Code.",
+    unsupportedActionInBrowser:
+      "Esta acción solo está disponible en VS Code. Abre Trainer en VS Code para continuar.",
   },
   "fr-FR": {
     connectInVsCode: "Ouvrez d'abord Trainer dans VS Code pour connecter cet espace de travail.",
     openedSettingsInVsCode: "Réglages Trainer ouverts dans VS Code pour gérer le modèle et l'espace de travail.",
+    notConnected: "Non connecté à VS Code. Ouvrez d'abord Trainer dans VS Code.",
+    unsupportedTrainingInBrowser:
+      "Cette étape pratique doit être effectuée et vérifiée dans VS Code ; rien n'a été enregistré. Continuez dans VS Code.",
+    unsupportedActionInBrowser:
+      "Cette action est uniquement disponible dans VS Code. Ouvrez Trainer dans VS Code pour continuer.",
   },
   "de-DE": {
     connectInVsCode: "Öffne zuerst Trainer in VS Code, um diesen Arbeitsbereich zu verbinden.",
     openedSettingsInVsCode: "Trainer-Einstellungen in VS Code geöffnet, um Modell und Arbeitsbereich zu verwalten.",
+    notConnected: "Nicht mit VS Code verbunden. Öffne zuerst Trainer in VS Code.",
+    unsupportedTrainingInBrowser:
+      "Dieser Übungsschritt muss in VS Code abgeschlossen und geprüft werden; nichts wurde gespeichert. Fahre in VS Code fort.",
+    unsupportedActionInBrowser:
+      "Diese Aktion ist nur in VS Code verfügbar. Öffne Trainer in VS Code, um fortzufahren.",
   },
   "ja-JP": {
     connectInVsCode: "先に VS Code で Trainer を開いて接続してください。",
     openedSettingsInVsCode: "モデルとワークスペースを管理するため VS Code で Trainer 設定を開きました。",
+    notConnected: "VS Code に接続されていません。先に VS Code で Trainer を開いてください。",
+    unsupportedTrainingInBrowser:
+      "この練習ステップは VS Code で完了・検証する必要があります（保存されていません）。VS Code に戻って続けてください。",
+    unsupportedActionInBrowser:
+      "この操作は VS Code でのみ利用できます。VS Code で Trainer を開いて続けてください。",
   },
   "ko-KR": {
     connectInVsCode: "먼저 VS Code에서 Trainer를 열어 연결을 완료하세요.",
     openedSettingsInVsCode: "모델 및 작업 공간 연결을 관리하기 위해 VS Code에서 Trainer 설정을 열었습니다.",
+    notConnected: "VS Code에 연결되지 않았습니다. 먼저 VS Code에서 Trainer를 여세요.",
+    unsupportedTrainingInBrowser:
+      "이 연습 단계는 VS Code에서 완료하고 검증해야 하며 저장되지 않았습니다. VS Code에서 계속하세요.",
+    unsupportedActionInBrowser:
+      "이 작업은 VS Code에서만 사용할 수 있습니다. VS Code에서 Trainer를 열어 계속하세요.",
   },
   "pt-BR": {
     connectInVsCode: "Abra primeiro o Trainer no VS Code para conectar este espaço de trabalho.",
     openedSettingsInVsCode: "Configurações do Trainer abertas no VS Code para gerenciar o modelo e o espaço de trabalho.",
+    notConnected: "Não conectado ao VS Code. Abra primeiro o Trainer no VS Code.",
+    unsupportedTrainingInBrowser:
+      "Esta etapa prática precisa ser concluída e verificada no VS Code; nada foi salvo. Continue no VS Code.",
+    unsupportedActionInBrowser:
+      "Esta ação está disponível apenas no VS Code. Abra o Trainer no VS Code para continuar.",
   },
 };
 
@@ -844,6 +877,11 @@ export function createChromeSidePanelTransport(
     });
   };
 
+  const activeBridgeCopy = (): SidePanelBridgeCopy => {
+    const language = resolveCurrentLanguage(persistedState);
+    return SIDEPANEL_BRIDGE_COPY[language] ?? SIDEPANEL_BRIDGE_COPY["en-US"];
+  };
+
   const handleTrainingCommand = async (
     commandId: string,
     rawPayload: Record<string, unknown>,
@@ -853,7 +891,12 @@ export function createChromeSidePanelTransport(
     if (!currentAuth) {
       emitHostMessage({
         type: "training/persistenceAck",
-        payload: { requestId, commandId, ok: false, message: "Not connected" },
+        payload: {
+          requestId,
+          commandId,
+          ok: false,
+          message: activeBridgeCopy().notConnected,
+        },
       });
       return;
     }
@@ -903,7 +946,7 @@ export function createChromeSidePanelTransport(
           requestId,
           commandId,
           ok: false,
-          message: UNSUPPORTED_TRAINING_COMMAND_MESSAGE,
+          message: activeBridgeCopy().unsupportedTrainingInBrowser,
         },
       });
       return;
@@ -944,10 +987,10 @@ export function createChromeSidePanelTransport(
     }
   };
 
-  const emitUnsupportedCommandStatus = (target: string): void => {
+  const emitUnsupportedCommandStatus = (_target: string): void => {
     emitHostMessage({
       type: "operation/status",
-      payload: { tone: "error", message: unsupportedCommandMessage(target) },
+      payload: { tone: "error", message: activeBridgeCopy().unsupportedActionInBrowser },
     });
   };
 

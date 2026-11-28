@@ -644,20 +644,20 @@ class ProviderService(
         )
         if _prefers_chinese(response_language):
             category_hint = {
-                "invalid_key_or_permission": "先检查 API key / permission 是否有效。",
-                "malformed_response": "先确认 endpoint 真正返回的是 OpenAI-compatible protocol。",
-                "truncated_or_empty": "先缩短可见答案或提高 provider 的输出限制。",
-                "rate_limit": "先等一会儿，再重试同一轮。",
-                "model_unsupported": "先换一个这个 provider 支持的 model name。",
-            }.get(category, "先修复 provider path，再重试同一轮。")
+                "invalid_key_or_permission": "先在设置里检查 API 密钥或访问权限是否有效。",
+                "malformed_response": "先确认当前服务地址支持 OpenAI 兼容接口协议。",
+                "truncated_or_empty": "先缩短回答长度或提高模型输出上限。",
+                "rate_limit": "先稍等片刻，再重试同一轮。",
+                "model_unsupported": "先换一个当前模型连接支持的模型名称。",
+            }.get(category, "先检查并修复模型连接，再重试同一轮。")
             lines = [
-                "Trainer 目前卡在 provider path，暂时无法继续这轮 coaching。",
+                "当前模型连接不可用，这轮对话暂时无法继续。",
                 "",
                 category_hint,
             ]
             if detail_text:
-                lines.append(f"详情: {detail_text}")
-            lines.append("下一步：先把 provider 恢复到可用状态，再重新发送这轮。")
+                lines.append(f"详情：{detail_text}")
+            lines.append("下一步：先把模型连接恢复到可用状态，再重新发送这轮。")
             return "\n".join(lines)
 
         summary = self.provider_failure_summary(category, response_language)

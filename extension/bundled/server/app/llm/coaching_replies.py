@@ -1994,65 +1994,65 @@ def _clean_provider_failure_summary(
     if category == "streaming_unavailable":
         return _localized_text(
             "The configured provider has no verified native streaming path for this turn.",
-            "当前 provider 没有通过验证的原生流式路径，这一轮不能继续。",
+            "当前模型连接没有通过验证的原生流式输出能力，这一轮不能继续。",
             response_language,
         )
     summary_map: dict[str, tuple[str, str]] = {
         "invalid_key_or_permission": (
             "The provider rejected this turn's API key or permissions.",
-            "这个 provider 拒绝了这一轮使用的 API key 或 permission。",
+            "当前模型服务拒绝了这一轮使用的 API 密钥或访问权限。",
         ),
         "model_unsupported": (
             "The provider reached the endpoint, but this model name is not accepted there.",
-            "这个 provider 可以连通，但当前 model name 不被这个 endpoint 接受。",
+            "模型连接可以连通，但当前服务地址不接受这个模型名称。",
         ),
         "model_not_found": (
             "The provider reached the gateway, but no available channel matched this model.",
-            "这个 provider 可以连通，但 gateway 里没有可用 channel 匹配当前 model。",
+            "模型连接可以连通，但当前服务地址下没有可用通道匹配这个模型。",
         ),
         "language_corruption": (
             "The provider returned a visibly corrupted coaching reply on this turn.",
-            "这个 provider 可达，但这一轮返回了肉眼可见的乱码回复。",
+            "模型服务可达，但这一轮返回了肉眼可见的乱码回复。",
         ),
         "language_probe_inconclusive": (
             "The provider reached the endpoint, but Trainer could not fully verify zh-CN input integrity yet.",
-            "这个 provider 可达，但 Trainer 还不能完整验证这条链路的 zh-CN 输入保真度。",
+            "模型服务可达，但 Trainer 还不能完整验证这条连接的中文输入保真度。",
         ),
         "empty_response": (
             "The provider reached the endpoint, but returned no usable visible reply.",
-            "这个 provider 可达，但没有返回可用的可见回复。",
+            "模型服务可达，但没有返回可用的可见回复。",
         ),
         "truncated_or_empty": (
             "The provider ended the response before it produced a complete visible coaching reply.",
-            "provider 在完整返回之前就结束了流，这一轮没有可信的完整答案。",
+            "模型服务在完整返回前就结束了输出，这一轮没有得到完整回答。",
         ),
         "malformed_response": (
             "The endpoint responded, but the payload did not match the configured protocol.",
-            "这个 endpoint 有响应，但 payload 不符合当前配置的 protocol。",
+            "当前服务地址有响应，但返回内容不符合当前配置的接口协议。",
         ),
         "rate_limit": (
             "The provider rate-limited this turn before Trainer could continue.",
-            "这个 provider 对这一轮请求触发了 rate limit，Trainer 暂时不能继续。",
+            "当前模型服务对这一轮请求触发了频率限制，Trainer 暂时无法继续。",
         ),
         "upstream_unavailable": (
             "The provider answered, but its own upstream failed on this turn. Nothing "
             "needs changing in the connection — retrying shortly is the fix.",
-            "provider 已经应答，但它自己的上游在这一轮失败了。连接配置不用改，稍后重试即可。",
+            "模型服务已经应答，但它自己的上游在这一轮失败了。连接配置不用改，稍后重试即可。",
         ),
         "timeout": (
             "Trainer could not get a response from the provider before the timeout.",
-            "Trainer 在 timeout 前没有从 provider 收到响应。",
+            "Trainer 在超时前没有从模型服务收到响应。",
         ),
         "network": (
             "Trainer could not reach the provider over the network.",
-            "Trainer 目前无法通过 network 连到这个 provider。",
+            "Trainer 目前无法通过网络连到这个模型服务。",
         ),
     }
     english, chinese = summary_map.get(
         category,
         (
             "Trainer is blocked on the provider path for this turn.",
-            "Trainer 这一轮被 provider path 卡住了。",
+            "Trainer 这一轮在模型连接上受阻。",
         ),
     )
     return _localized_text(english, chinese, response_language)
@@ -2068,65 +2068,65 @@ def _clean_provider_failure_next_step(
     if category == "streaming_unavailable":
         return _localized_text(
             "Choose a provider and model with verified native streaming in Settings, retest it, and resend this exact turn.",
-            "先在设置里选择已验证支持原生流式的 provider 和 model，重新测试后再重发这一轮。",
+            "先在设置里选择已验证支持原生流式的模型连接和模型，重新测试后再重发这一轮。",
             response_language,
         )
     next_step_map: dict[str, tuple[str, str]] = {
         "invalid_key_or_permission": (
             "Check the API key or provider permissions, retest the connection, and resend this exact turn.",
-            "先检查 API key 或 provider permission，重新测试连接后再重发这一轮。",
+            "先在设置里检查 API 密钥或访问权限，重新测试连接后再重发这一轮。",
         ),
         "model_unsupported": (
             "Switch to a model name that this provider actually supports, retest, and resend this exact turn.",
-            "先换成这个 provider 真正支持的 model name，重新测试后再重发这一轮。",
+            "先换成当前模型连接真正支持的模型名称，重新测试后再重发这一轮。",
         ),
         "model_not_found": (
             "Pick a channel-backed model at this gateway, retest, and resend this exact turn.",
-            "先换成这个 gateway 里真实可用的 model，重新测试后再重发这一轮。",
+            "先换成当前服务地址下真实可用的模型，重新测试后再重发这一轮。",
         ),
         "language_corruption": (
             "Switch provider or gateway first, then resend this same turn after the visible corruption disappears.",
-            "先切换 provider 或 gateway，确认乱码消失后再重发这一轮。",
+            "先切换模型连接或服务地址，确认乱码消失后再重发这一轮。",
         ),
         "language_probe_inconclusive": (
             "Retest with a zh-CN probe before trusting this provider for Chinese coaching turns.",
-            "先用 zh-CN probe 重新测试，再把这个 provider 用于中文 coaching。",
+            "先重新测试中文连通性，再把这个模型连接用于中文对话。",
         ),
         "empty_response": (
             "Retest with a visible-text probe or switch to a model that returns visible text.",
-            "先用 visible-text probe 重新测试，或切换到会返回可见文本的 model。",
+            "先在设置里重新测试连接，或切换到会返回可见文本的模型。",
         ),
         "truncated_or_empty": (
             "Raise the model's output limit or shorten the visible answer, then resend this exact turn.",
-            "先提高 model 的输出上限或缩短可见答案，再重发这一轮。",
+            "先提高模型的输出上限或缩短回答长度，再重发这一轮。",
         ),
         "malformed_response": (
             "Check that the endpoint really speaks the configured protocol, then retest and resend this exact turn.",
-            "先确认这个 endpoint 真的支持当前配置的 protocol，再测试并重发这一轮。",
+            "先确认当前服务地址真的支持所选接口协议，再测试并重发这一轮。",
         ),
         "rate_limit": (
             "Wait briefly, then retry this same turn once the rate limit clears.",
-            "先等一会儿，等 rate limit 过去后再重试这一轮。",
+            "先稍等片刻，等频率限制解除后再重试这一轮。",
         ),
         "upstream_unavailable": (
             "The provider itself is up — its upstream is failing. Retry this same turn in a moment; "
             "do not change the connection settings.",
-            "provider 本身是通的，是它的上游在报错。稍等一下重试这一轮即可，不用改连接配置。",
+            "模型服务本身是通的，是它的上游在报错。稍等一下重试这一轮即可，不用改连接配置。",
         ),
         "timeout": (
             "Retry once after checking provider latency or gateway load.",
-            "先检查 provider 延迟或 gateway 负载，再重试这一轮。",
+            "先检查模型服务延迟或服务地址负载，再重试这一轮。",
         ),
         "network": (
             "Check the network path or proxy settings, then resend this exact turn.",
-            "先检查 network 路径或 proxy 设置，再重发这一轮。",
+            "先检查网络连接或代理设置，再重发这一轮。",
         ),
     }
     english, chinese = next_step_map.get(
         category,
         (
             "Repair the provider path, then resend this exact coaching turn.",
-            "先修好 provider path，再重发这一轮 coaching。",
+            "先检查并修复模型连接，再重发这一轮对话。",
         ),
     )
     return _localized_text(english, chinese, response_language)
@@ -2149,7 +2149,7 @@ def _clean_provider_failure_reply(
     next_step = self.provider_failure_next_step(category, response_language)
     if _prefers_chinese(response_language):
         lines = [
-            "Trainer 当前卡在 provider path，所以这轮 coaching 还不能继续。",
+            "当前模型连接不可用，这轮对话暂时无法继续。",
             "",
             summary,
         ]
@@ -2189,7 +2189,7 @@ def _clean_agentic_fallback_continuity(
         summary = (
             "This turn needs a fresh provider retry, but the same thread can continue."
             if not chinese
-            else "这轮 provider 需要重新连接，但同一条学习线可以继续。"
+            else "这轮需要重新连接模型服务，但同一条学习线可以继续。"
         )
 
     scenario = str(context.get("scenario") or "general").strip()
@@ -2243,7 +2243,7 @@ def _clean_agentic_fallback_continuity(
         next_step = (
             "Retry from the smallest verified step after checking the provider connection."
             if not chinese
-            else "先检查 provider connection，再从已验证的最小步骤继续。"
+            else "先检查模型连接，再从已验证的最小步骤继续。"
         )
     return summary, next_step
 

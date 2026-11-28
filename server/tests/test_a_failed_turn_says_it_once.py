@@ -30,8 +30,8 @@ from app.core.models import CapabilityFlags, ProviderConfig
 
 pytestmark = pytest.mark.asyncio
 
-SUMMARY = "Trainer 目前无法通过 network 连到这个 provider。"
-NEXT_STEP = "下一步：先检查 network 路径或 proxy 设置，再重发这一轮。"
+SUMMARY = "Trainer 目前无法通过网络连到这个模型服务。"
+NEXT_STEP = "下一步：先检查网络连接或代理设置，再重发这一轮。"
 PLAIN_BANNER = "这次没能连上模型服务。请在设置里检查服务地址、模型和 API 密钥后再试一次。"
 
 

@@ -6942,8 +6942,8 @@ def test_provider_failure_reply_uses_visible_zh_fallback_with_detail() -> None:
     )
 
     assert reply.strip()
-    assert "Trainer 当前卡在 provider path" in reply
-    assert "API key 或 permission" in reply
+    assert "当前模型连接不可用" in reply
+    assert "API 密钥或访问权限" in reply
     assert "Error code: 401 - Invalid token" in reply
     assert "upstream response body redacted" not in reply
     assert "下一步" in reply
@@ -6954,18 +6954,18 @@ def test_provider_failure_reply_uses_visible_zh_fallback_with_detail() -> None:
     [
         (
             "invalid_key_or_permission",
-            "API key",
+            "API 密钥",
             "重新测试连接",
         ),
         (
             "model_unsupported",
-            "model name",
-            "真正支持的 model name",
+            "模型名称",
+            "真正支持的模型名称",
         ),
         (
             "language_corruption",
             "肉眼可见的乱码回复",
-            "先切换 provider 或 gateway",
+            "先切换模型连接或服务地址",
         ),
     ],
 )
